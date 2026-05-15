@@ -3,17 +3,36 @@ Handicap Calculator Module - Handles handicap calculations
 """
 import pandas as pd
 import streamlit as st
+import os
 
 # ================================================================================
 # CACHE COURSE DATA
 # ================================================================================
 @st.cache_data
 def load_course_data(uploaded_file=None):
-    """Load course data from Excel file"""
+    """Load course data from Excel or CSV file"""
     try:
         if uploaded_file:
-            return pd.read_excel(uploaded_file)
-        return pd.read_excel("Course_Information.xlsx")
+            if uploaded_file.name.endswith('.csv'):
+                return pd.read_csv(uploaded_file)
+            else:
+                return pd.read_excel(uploaded_file)
+        
+        # Try loading from data folder
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        
+        # Try Excel first
+        excel_path = os.path.join(data_dir, "Course_Information.xlsx")
+        if os.path.exists(excel_path):
+            return pd.read_excel(excel_path)
+        
+        # Try CSV
+        csv_path = os.path.join(data_dir, "Course_Information.csv")
+        if os.path.exists(csv_path):
+            return pd.read_csv(csv_path)
+        
+        st.warning("Course_Information file not found. Please upload it in the sidebar.")
+        return None
     except Exception as e:
         st.error(f"Error loading course data: {e}")
         return None
