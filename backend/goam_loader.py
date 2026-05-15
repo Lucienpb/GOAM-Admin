@@ -1,13 +1,29 @@
 import pandas as pd
 
+
 class GOAMLoader:
+    """
+    Responsible for loading GOAM Excel workbooks and single-round scorecards.
+    """
 
     @staticmethod
     def load_season(file):
-        """Load all sheets from a full-season workbook."""
+        """
+        Load all sheets from a full-season workbook.
+        Returns a dict: {sheet_name: DataFrame}
+        """
         return pd.read_excel(file, sheet_name=None)
 
     @staticmethod
     def load_single_round(file):
-        """Load a single-round sheet."""
-        return pd.read_excel(file)
+        """
+        Load a single-round scorecard.
+        Expects columns at least: Name, Strokes, IPS
+        """
+        df = pd.read_excel(file)
+
+        required = {"Name", "Strokes", "IPS"}
+        if not required.issubset(df.columns):
+            raise ValueError(f"Scorecard missing required columns: {required}")
+
+        return df
