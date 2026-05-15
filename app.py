@@ -7,6 +7,7 @@ from utils.handicap_scraper import test_login
 from utils.handicap_calculator import load_course_data
 from apps.pairing_app import run as run_pairing_app
 from apps.handicap_app import run as run_handicap_app
+from apps.scores_app import run_scores_app
 
 # ================================================================================
 # LOGGING
@@ -41,10 +42,13 @@ st.title("⛳ GOAM Admin Dashboard")
 # ================================================================================
 # SIDEBAR - APP NAVIGATION
 # ================================================================================
-st.sidebar.title("📱 Navigation")
 app_mode = st.sidebar.radio(
     "Select an app:",
-    ["⛳ Pairing Matrix & Fourball", "🏌️ Handicap Scraper"],
+    [
+        "⛳ Pairing Matrix & Fourball",
+        "🏌️ Handicap Scraper",
+        "📘 GOAM Scores & Rounds"
+    ],
     index=0
 )
 
@@ -75,9 +79,14 @@ if app_mode == "🏌️ Handicap Scraper":
     st.sidebar.write("---")
     st.sidebar.subheader("📊 Course Data")
 
-    course_file = st.sidebar.file_uploader("Upload Course_Information.xlsx", type=["xlsx"])
-    if course_file:
-        st.session_state.course_df = load_course_data(uploaded_file=course_file)
+    file_source = st.sidebar.radio("Course file source:", ["Use Local File", "Upload File"], key="file_source")
+    
+    if file_source == "Upload File":
+        course_file = st.sidebar.file_uploader("Upload Course_Information file", type=["xlsx", "csv"])
+        if course_file:
+            st.session_state.course_df = load_course_data(uploaded_file=course_file)
+        else:
+            st.session_state.course_df = load_course_data()
     else:
         st.session_state.course_df = load_course_data()
 
@@ -90,5 +99,13 @@ else:
 # ================================================================================
 if app_mode == "⛳ Pairing Matrix & Fourball":
     run_pairing_app()
+
 elif app_mode == "🏌️ Handicap Scraper":
-    run_handicap_app(st.session_state.logged_in, st.session_state.credentials, course_df)
+    run_handicap_app(
+        st.session_state.logged_in,
+        st.session_state.credentials,
+        course_df
+    )
+
+elif app_mode == "📘 GOAM Scores & Rounds":
+    run_scores_app()

@@ -14,7 +14,10 @@ def load_course_data(uploaded_file=None):
     try:
         if uploaded_file:
             if uploaded_file.name.endswith('.csv'):
-                return pd.read_csv(uploaded_file)
+                try:
+                    return pd.read_csv(uploaded_file, encoding='utf-8')
+                except UnicodeDecodeError:
+                    return pd.read_csv(uploaded_file, encoding='latin-1')
             else:
                 return pd.read_excel(uploaded_file)
         
@@ -26,10 +29,16 @@ def load_course_data(uploaded_file=None):
         if os.path.exists(excel_path):
             return pd.read_excel(excel_path)
         
-        # Try CSV
+        # Try CSV with different encodings
         csv_path = os.path.join(data_dir, "Course_Information.csv")
         if os.path.exists(csv_path):
-            return pd.read_csv(csv_path)
+            try:
+                return pd.read_csv(csv_path, encoding='utf-8')
+            except UnicodeDecodeError:
+                try:
+                    return pd.read_csv(csv_path, encoding='latin-1')
+                except UnicodeDecodeError:
+                    return pd.read_csv(csv_path, encoding='cp1252')
         
         st.warning("Course_Information file not found. Please upload it in the sidebar.")
         return None
