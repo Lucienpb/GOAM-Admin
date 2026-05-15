@@ -32,8 +32,11 @@ def run_scores_app():
     if season_file:
         sheets = GOAMLoader.load_season(season_file)
         season_rounds = GOAMCalculator.build_from_course_sheets(sheets)
+
         if not season_rounds.empty:
-            rounds.rounds.append(season_rounds)
+            # IMPORTANT: Reset rounds to avoid duplicates
+            rounds.rounds = [season_rounds]
+            st.success("Season workbook loaded successfully.")
 
     # -----------------------------
     # 2. Upload single-round scorecard
@@ -102,7 +105,7 @@ def run_scores_app():
     # -----------------------------
     # 5. Calculate IPS, Strokes, LIV
     # -----------------------------
-    ips_table = GOAMCalculator.calculate_best_six_ips(all_rounds_df)
+    ips_table = GOAMCalculator.build_ips_leaderboard(all_rounds_df)
     strokes_table = GOAMCalculator.calculate_strokes(all_rounds_df)
     liv_table = GOAMCalculator.calculate_liv(all_rounds_df)
     course_sheets = GOAMCalculator.split_by_course(all_rounds_df)
@@ -110,7 +113,7 @@ def run_scores_app():
     # -----------------------------
     # 6. IPS always visible
     # -----------------------------
-    st.subheader("🏆 IPS Leaderboard (Best 6)")
+    st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
     st.dataframe(ips_table, use_container_width=True)
 
     # -----------------------------

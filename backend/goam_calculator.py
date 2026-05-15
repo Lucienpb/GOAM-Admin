@@ -140,3 +140,32 @@ class GOAMCalculator:
         """
         month = datetime.now().strftime("%b")
         return f"GOAM_Scores_2026_{month}_updated.xlsx"
+
+@staticmethod
+def build_ips_leaderboard(df):
+    """
+    Returns IPS leaderboard in Excel format:
+    Name | Best6_IPS | Akasia | PGC | Kyalami | Copperleaf | Services | Rounds_Played
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    # Pivot IPS per course
+    pivot = df.pivot_table(
+        index="Name",
+        columns="Course",
+        values="IPS",
+        aggfunc="first"
+    ).reset_index()
+
+    # Calculate Best 6 and Rounds Played
+    best6 = GOAMCalculator.calculate_best_six_ips(df)
+
+    # Merge
+    merged = pivot.merge(best6, on="Name", how="left")
+
+    # Order columns
+    course_cols = sorted([c for c in merged.columns if c not in ["Name", "Best6_IPS", "Rounds_Played"]])
+    final_cols = ["Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
+
+    return merged[final_cols]
