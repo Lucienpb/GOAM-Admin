@@ -34,7 +34,7 @@ def run_scores_app():
         season_rounds = GOAMCalculator.build_from_course_sheets(sheets)
 
         if not season_rounds.empty:
-            # IMPORTANT: Reset rounds to avoid duplicates
+            # Reset rounds to avoid duplicates
             rounds.rounds = [season_rounds]
             st.success("Season workbook loaded successfully.")
 
@@ -103,21 +103,36 @@ def run_scores_app():
         return
 
     # -----------------------------
-    # 5. Calculate IPS, Strokes, LIV
+    # 5. Course selection for leaderboards
     # -----------------------------
-    ips_table = GOAMCalculator.build_ips_leaderboard(all_rounds_df)
-    strokes_table = GOAMCalculator.calculate_strokes(all_rounds_df)
-    liv_table = GOAMCalculator.calculate_liv(all_rounds_df)
-    course_sheets = GOAMCalculator.split_by_course(all_rounds_df)
+    st.subheader("🎯 Select courses to include in leaderboards")
+
+    all_courses = GOAMCalculator.list_courses(all_rounds_df)
+
+    selected_courses = st.multiselect(
+        "Only include these courses:",
+        all_courses,
+        default=all_courses
+    )
+
+    filtered_df = all_rounds_df[all_rounds_df["Course"].isin(selected_courses)]
 
     # -----------------------------
-    # 6. IPS always visible
+    # 6. Calculate IPS, Strokes, LIV
+    # -----------------------------
+    ips_table = GOAMCalculator.build_ips_leaderboard(filtered_df)
+    strokes_table = GOAMCalculator.calculate_strokes(filtered_df)
+    liv_table = GOAMCalculator.calculate_liv(filtered_df)
+    course_sheets = GOAMCalculator.split_by_course(filtered_df)
+
+    # -----------------------------
+    # 7. IPS always visible
     # -----------------------------
     st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
     st.dataframe(ips_table, use_container_width=True)
 
     # -----------------------------
-    # 7. Optional sheet viewer
+    # 8. Optional sheet viewer
     # -----------------------------
     st.subheader("📂 View other tables")
 
@@ -132,7 +147,7 @@ def run_scores_app():
         st.dataframe(course_sheets[choice], use_container_width=True)
 
     # -----------------------------
-    # 8. Export updated workbook
+    # 9. Export updated workbook
     # -----------------------------
     st.subheader("💾 Export updated GOAM workbook")
 

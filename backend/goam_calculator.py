@@ -192,3 +192,8 @@ class GOAMCalculator:
         """
         month = datetime.now().strftime("%b")
         return f"GOAM_Scores_2026_{month}_updated.xlsx"
+    @staticmethod
+    def list_courses(df):
+        if df.empty:
+           return []
+        return sorted(df["Course"].dropna().unique().tolist())
