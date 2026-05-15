@@ -34,7 +34,6 @@ def run_scores_app():
         season_rounds = GOAMCalculator.build_from_course_sheets(sheets)
 
         if not season_rounds.empty:
-            # Reset rounds to avoid duplicates
             rounds.rounds = [season_rounds]
             st.success("Season workbook loaded successfully.")
 

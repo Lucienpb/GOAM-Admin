@@ -5,13 +5,15 @@ from datetime import datetime
 class GOAMCalculator:
     """
     Performs all GOAM calculations:
+    - Build long-format rounds from course sheets
     - IPS best six
     - Strokes best six (over par)
+    - IPS leaderboard (Excel layout)
+    - Strokes leaderboard (Excel layout)
     - LIV team scores
-    - IPS leaderboard in Excel format
-    - Strokes leaderboard in Excel format
-    - Splitting by course
+    - Split by course
     - Dynamic course list
+    - Output filename
     """
 
     PAR = 72
@@ -55,7 +57,7 @@ class GOAMCalculator:
         return sorted(df["Course"].dropna().unique().tolist())
 
     # ---------------------------------------------------------
-    # Best 6 IPS
+    # Best 6 IPS (core numbers only)
     # ---------------------------------------------------------
     @staticmethod
     def calculate_best_six_ips(df):
@@ -77,7 +79,6 @@ class GOAMCalculator:
 
         out = pd.DataFrame(results)
 
-        # Correct sort order
         out = out.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
             ascending=[False, False]
@@ -86,7 +87,7 @@ class GOAMCalculator:
         return out
 
     # ---------------------------------------------------------
-    # Best 6 Strokes (over par)
+    # Best 6 Strokes (core numbers only)
     # ---------------------------------------------------------
     @staticmethod
     def calculate_strokes(df):
@@ -113,7 +114,6 @@ class GOAMCalculator:
 
         out = pd.DataFrame(results)
 
-        # Correct sort order
         out = out.sort_values(
             by=["Games_Played", "Best6_Strokes_Over_Par"],
             ascending=[False, True]
@@ -149,7 +149,6 @@ class GOAMCalculator:
 
         out = pd.DataFrame(results)
 
-        # Sort by course, then LIV points descending
         out = out.sort_values(
             by=["Course", "LIV_Points"],
             ascending=[True, False]
@@ -158,18 +157,17 @@ class GOAMCalculator:
         return out
 
     # ---------------------------------------------------------
-    # IPS Leaderboard (Excel format)
+    # IPS Leaderboard (Excel layout)
     # ---------------------------------------------------------
     @staticmethod
     def build_ips_leaderboard(df):
         """
         Returns IPS leaderboard in Excel format:
-        Name | Best6_IPS | Akasia | PGC | Kyalami | Copperleaf | Services | Rounds_Played
+        Rank | Name | Best6_IPS | <courses...> | Rounds_Played
         """
         if df.empty:
             return pd.DataFrame()
 
-        # Pivot IPS per course
         pivot = df.pivot_table(
             index="Name",
             columns="Course",
@@ -177,26 +175,34 @@ class GOAMCalculator:
             aggfunc="first"
         ).reset_index()
 
-        # Calculate Best 6 and Rounds Played
         best6 = GOAMCalculator.calculate_best_six_ips(df)
 
-        # Merge
         merged = pivot.merge(best6, on="Name", how="left")
 
-        # Order columns
-        course_cols = sorted([c for c in merged.columns if c not in ["Name", "Best6_IPS", "Rounds_Played"]])
-        final_cols = ["Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
+        merged = merged.fillna(0)
+
+        merged = merged.sort_values(
+            by=["Best6_IPS", "Rounds_Played"],
+            ascending=[False, False]
+        ).reset_index(drop=True)
+
+        merged.insert(0, "Rank", merged.index + 1)
+
+        course_cols = sorted(
+            [c for c in merged.columns if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
+        )
+        final_cols = ["Rank", "Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
 
         return merged[final_cols]
 
     # ---------------------------------------------------------
-    # Strokes Leaderboard (Excel format)
+    # Strokes Leaderboard (Excel layout)
     # ---------------------------------------------------------
     @staticmethod
     def build_strokes_leaderboard(df):
         """
         Returns Strokes leaderboard in Excel format:
-        Name | Best6_Strokes_Over_Par | Akasia | PGC | Kyalami | Copperleaf | Services | Games_Played
+        Rank | Name | Best6_Strokes_Over_Par | <courses...> | Games_Played
         """
         if df.empty:
             return pd.DataFrame()
@@ -204,7 +210,6 @@ class GOAMCalculator:
         df = df.copy()
         df["Strokes_Over_Par"] = df["Strokes"] - GOAMCalculator.PAR
 
-        # Pivot strokes per course
         pivot = df.pivot_table(
             index="Name",
             columns="Course",
@@ -212,15 +217,23 @@ class GOAMCalculator:
             aggfunc="first"
         ).reset_index()
 
-        # Calculate Best 6 Strokes
         best6 = GOAMCalculator.calculate_strokes(df)
 
-        # Merge
         merged = pivot.merge(best6, on="Name", how="left")
 
-        # Order columns
-        course_cols = sorted([c for c in merged.columns if c not in ["Name", "Best6_Strokes_Over_Par", "Games_Played"]])
-        final_cols = ["Name", "Best6_Strokes_Over_Par"] + course_cols + ["Games_Played"]
+        merged = merged.fillna(0)
+
+        merged = merged.sort_values(
+            by=["Games_Played", "Best6_Strokes_Over_Par"],
+            ascending=[False, True]
+        ).reset_index(drop=True)
+
+        merged.insert(0, "Rank", merged.index + 1)
+
+        course_cols = sorted(
+            [c for c in merged.columns if c not in ["Rank", "Name", "Best6_Strokes_Over_Par", "Games_Played"]]
+        )
+        final_cols = ["Rank", "Name", "Best6_Strokes_Over_Par"] + course_cols + ["Games_Played"]
 
         return merged[final_cols]
 
