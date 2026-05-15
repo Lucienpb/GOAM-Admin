@@ -181,6 +181,10 @@ class GOAMCalculator:
 
         merged = merged.fillna(0)
 
+        # FIX: ensure numeric sorting works
+        numeric_cols = merged.columns.drop(["Rank", "Name"])
+        merged[numeric_cols] = merged[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+
         merged = merged.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
             ascending=[False, False]
