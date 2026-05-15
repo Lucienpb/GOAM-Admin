@@ -9,7 +9,9 @@ class GOAMCalculator:
     - Strokes best six (over par)
     - LIV team scores
     - IPS leaderboard in Excel format
+    - Strokes leaderboard in Excel format
     - Splitting by course
+    - Dynamic course list
     """
 
     PAR = 72
@@ -44,6 +46,15 @@ class GOAMCalculator:
         return pd.DataFrame(rows)
 
     # ---------------------------------------------------------
+    # Dynamic course list
+    # ---------------------------------------------------------
+    @staticmethod
+    def list_courses(df):
+        if df.empty:
+            return []
+        return sorted(df["Course"].dropna().unique().tolist())
+
+    # ---------------------------------------------------------
     # Best 6 IPS
     # ---------------------------------------------------------
     @staticmethod
@@ -65,10 +76,14 @@ class GOAMCalculator:
             })
 
         out = pd.DataFrame(results)
-        return out.sort_values(
+
+        # Correct sort order
+        out = out.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
             ascending=[False, False]
         ).reset_index(drop=True)
+
+        return out
 
     # ---------------------------------------------------------
     # Best 6 Strokes (over par)
@@ -97,10 +112,14 @@ class GOAMCalculator:
             })
 
         out = pd.DataFrame(results)
-        return out.sort_values(
+
+        # Correct sort order
+        out = out.sort_values(
             by=["Games_Played", "Best6_Strokes_Over_Par"],
             ascending=[False, True]
         ).reset_index(drop=True)
+
+        return out
 
     # ---------------------------------------------------------
     # LIV scoring
@@ -129,10 +148,14 @@ class GOAMCalculator:
             return pd.DataFrame(columns=["Team", "Course", "LIV_Points"])
 
         out = pd.DataFrame(results)
-        return out.sort_values(
+
+        # Sort by course, then LIV points descending
+        out = out.sort_values(
             by=["Course", "LIV_Points"],
             ascending=[True, False]
         ).reset_index(drop=True)
+
+        return out
 
     # ---------------------------------------------------------
     # IPS Leaderboard (Excel format)
@@ -167,6 +190,41 @@ class GOAMCalculator:
         return merged[final_cols]
 
     # ---------------------------------------------------------
+    # Strokes Leaderboard (Excel format)
+    # ---------------------------------------------------------
+    @staticmethod
+    def build_strokes_leaderboard(df):
+        """
+        Returns Strokes leaderboard in Excel format:
+        Name | Best6_Strokes_Over_Par | Akasia | PGC | Kyalami | Copperleaf | Services | Games_Played
+        """
+        if df.empty:
+            return pd.DataFrame()
+
+        df = df.copy()
+        df["Strokes_Over_Par"] = df["Strokes"] - GOAMCalculator.PAR
+
+        # Pivot strokes per course
+        pivot = df.pivot_table(
+            index="Name",
+            columns="Course",
+            values="Strokes_Over_Par",
+            aggfunc="first"
+        ).reset_index()
+
+        # Calculate Best 6 Strokes
+        best6 = GOAMCalculator.calculate_strokes(df)
+
+        # Merge
+        merged = pivot.merge(best6, on="Name", how="left")
+
+        # Order columns
+        course_cols = sorted([c for c in merged.columns if c not in ["Name", "Best6_Strokes_Over_Par", "Games_Played"]])
+        final_cols = ["Name", "Best6_Strokes_Over_Par"] + course_cols + ["Games_Played"]
+
+        return merged[final_cols]
+
+    # ---------------------------------------------------------
     # Split by course
     # ---------------------------------------------------------
     @staticmethod
@@ -192,8 +250,3 @@ class GOAMCalculator:
         """
         month = datetime.now().strftime("%b")
         return f"GOAM_Scores_2026_{month}_updated.xlsx"
-    @staticmethod
-    def list_courses(df):
-        if df.empty:
-           return []
-        return sorted(df["Course"].dropna().unique().tolist())
