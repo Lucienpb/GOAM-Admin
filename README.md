@@ -1,6 +1,6 @@
 # GOAM Admin Dashboard
 
-Admin dashboard for GOAM (Golf Of A Magnitude) with two main features:
+Admin dashboard for GOAM (Golf Once A Month) with two main features:
 
 ## Features
 
