@@ -1,9 +1,8 @@
 import pandas as pd
 
-
 class GOAMLoader:
     """
-    Responsible for loading GOAM Excel workbooks and single-round scorecards.
+    Loads GOAM Excel workbooks and single-round scorecards.
     """
 
     @staticmethod
@@ -18,11 +17,11 @@ class GOAMLoader:
     def load_single_round(file):
         """
         Load a single-round scorecard.
-        Expects columns at least: Name, Strokes, IPS
+        Must contain: Name, Strokes, IPS
         """
         df = pd.read_excel(file)
-
         required = {"Name", "Strokes", "IPS"}
+
         if not required.issubset(df.columns):
             raise ValueError(f"Scorecard missing required columns: {required}")
 

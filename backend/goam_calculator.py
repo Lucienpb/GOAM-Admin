@@ -1,7 +1,6 @@
 import pandas as pd
 from datetime import datetime
 
-
 class GOAMCalculator:
     """
     Performs all GOAM calculations:
@@ -16,14 +15,14 @@ class GOAMCalculator:
     @staticmethod
     def build_from_course_sheets(sheets_dict):
         """
-        Build a long-format DataFrame from course sheets in a season workbook.
-        Only sheets with columns {Name, Strokes, IPS} are treated as course sheets.
+        Build long-format DataFrame from course sheets.
+        Only sheets with {Name, Strokes, IPS} are treated as course sheets.
         """
         rows = []
 
         for sheet_name, df in sheets_dict.items():
             if not {"Name", "Strokes", "IPS"}.issubset(df.columns):
-                continue  # skip non-course sheets
+                continue
 
             for _, row in df.iterrows():
                 rows.append({
@@ -43,7 +42,6 @@ class GOAMCalculator:
     def calculate_best_six_ips(df):
         """
         IPS leaderboard: best six IPS scores per player.
-        Higher is better.
         """
         if df.empty:
             return pd.DataFrame(columns=["Name", "Best6_IPS", "Rounds_Played"])
@@ -59,12 +57,10 @@ class GOAMCalculator:
             })
 
         out = pd.DataFrame(results)
-        out = out.sort_values(
+        return out.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
             ascending=[False, False]
         ).reset_index(drop=True)
-
-        return out
 
     @staticmethod
     def calculate_strokes(df):
@@ -90,12 +86,10 @@ class GOAMCalculator:
             })
 
         out = pd.DataFrame(results)
-        out = out.sort_values(
+        return out.sort_values(
             by=["Games_Played", "Best6_Strokes_Over_Par"],
             ascending=[False, True]
         ).reset_index(drop=True)
-
-        return out
 
     @staticmethod
     def calculate_liv(df):
@@ -121,17 +115,15 @@ class GOAMCalculator:
             return pd.DataFrame(columns=["Team", "Course", "LIV_Points"])
 
         out = pd.DataFrame(results)
-        out = out.sort_values(
+        return out.sort_values(
             by=["Course", "LIV_Points"],
             ascending=[True, False]
         ).reset_index(drop=True)
 
-        return out
-
     @staticmethod
     def split_by_course(df):
         """
-        Return dict: {course_name: DataFrame} from long-format rounds DataFrame.
+        Return dict: {course_name: DataFrame}
         """
         if df.empty:
             return {}
@@ -146,5 +138,5 @@ class GOAMCalculator:
         """
         GOAM_Scores_2026_MMM_updated.xlsx
         """
-        month = datetime.now().strftime("%b")  # Jan, Feb, ...
+        month = datetime.now().strftime("%b")
         return f"GOAM_Scores_2026_{month}_updated.xlsx"
