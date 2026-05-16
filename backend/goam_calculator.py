@@ -10,7 +10,7 @@ class GOAMCalculator:
     - Strokes best six (over par)
     - IPS leaderboard (Excel layout)
     - Strokes leaderboard (Excel layout)
-    - LIV team scores
+    - LIV team scores + LIV leaderboard
     - Split by course
     - Dynamic course list
     - Output filename
@@ -39,7 +39,7 @@ class GOAMCalculator:
                     "Course": sheet_name,
                     "Strokes": row["Strokes"],
                     "IPS": row["IPS"],
-                    "Team": row["LIV"] if "LIV" in df.columns else None
+                    "Team": row["LIV"] if "LIV" in df.columns else None,
                 })
 
         if not rows:
@@ -74,14 +74,14 @@ class GOAMCalculator:
             results.append({
                 "Name": name,
                 "Best6_IPS": best6,
-                "Rounds_Played": len(group)
+                "Rounds_Played": len(group),
             })
 
         out = pd.DataFrame(results)
 
         out = out.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
-            ascending=[False, False]
+            ascending=[False, False],
         ).reset_index(drop=True)
 
         return out
@@ -109,20 +109,20 @@ class GOAMCalculator:
             results.append({
                 "Name": name,
                 "Games_Played": games,
-                "Best6_Strokes_Over_Par": best6
+                "Best6_Strokes_Over_Par": best6,
             })
 
         out = pd.DataFrame(results)
 
         out = out.sort_values(
             by=["Games_Played", "Best6_Strokes_Over_Par"],
-            ascending=[False, True]
+            ascending=[False, True],
         ).reset_index(drop=True)
 
         return out
 
     # ---------------------------------------------------------
-    # LIV scoring
+    # LIV scoring (raw per team per course)
     # ---------------------------------------------------------
     @staticmethod
     def calculate_liv(df):
@@ -141,7 +141,7 @@ class GOAMCalculator:
             results.append({
                 "Team": team,
                 "Course": course,
-                "LIV_Points": top3
+                "LIV_Points": top3,
             })
 
         if not results:
@@ -151,10 +151,68 @@ class GOAMCalculator:
 
         out = out.sort_values(
             by=["Course", "LIV_Points"],
-            ascending=[True, False]
+            ascending=[True, False],
         ).reset_index(drop=True)
 
         return out
+
+    # ---------------------------------------------------------
+    # LIV Leaderboard (pivoted + strength index + arrows)
+    # ---------------------------------------------------------
+    @staticmethod
+    def build_liv_leaderboard(df):
+        """
+        Returns LIV leaderboard in Excel/UI format:
+        Team | LIV Total | Strength Index | Trend | <courses...>
+        """
+        liv_raw = GOAMCalculator.calculate_liv(df)
+
+        if liv_raw.empty:
+            return pd.DataFrame()
+
+        # Pivot: rows = Team, columns = Course, values = LIV_Points
+        pivot = liv_raw.pivot_table(
+            index="Team",
+            columns="Course",
+            values="LIV_Points",
+            aggfunc="first",
+        ).fillna(0)
+
+        # LIV Total
+        pivot["LIV Total"] = pivot.sum(axis=1)
+
+        # Strength Index = average points per course played
+        course_cols = [c for c in pivot.columns if c != "LIV Total"]
+        played_counts = pivot[course_cols].astype(bool).sum(axis=1)
+        pivot["Strength Index"] = (
+            pivot[course_cols].sum(axis=1) / played_counts.replace(0, pd.NA)
+        ).round(1)
+
+        # Sort by LIV Total
+        pivot = pivot.sort_values(by="LIV Total", ascending=False)
+
+        # Ranking arrows (relative to previous row)
+        arrows = []
+        prev = None
+        for total in pivot["LIV Total"]:
+            if prev is None:
+                arrows.append("–")
+            else:
+                if total > prev:
+                    arrows.append("↑")
+                elif total < prev:
+                    arrows.append("↓")
+                else:
+                    arrows.append("→")
+            prev = total
+
+        pivot["Trend"] = arrows
+
+        # Final column order
+        final_cols = ["LIV Total", "Strength Index", "Trend"] + sorted(course_cols)
+        final = pivot[final_cols].reset_index()  # Team becomes a column
+
+        return final
 
     # ---------------------------------------------------------
     # IPS Leaderboard (Excel layout)
@@ -172,7 +230,7 @@ class GOAMCalculator:
             index="Name",
             columns="Course",
             values="IPS",
-            aggfunc="first"
+            aggfunc="first",
         ).reset_index()
 
         best6 = GOAMCalculator.calculate_best_six_ips(df)
@@ -181,20 +239,22 @@ class GOAMCalculator:
 
         merged = merged.fillna(0)
 
-        # FIX: ensure numeric sorting works
+        # Ensure numeric sorting works
         numeric_cols = merged.columns.drop(["Name"])
-        merged[numeric_cols] = merged[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
-
+        merged[numeric_cols] = merged[numeric_cols].apply(
+            pd.to_numeric, errors="coerce"
+        ).fillna(0)
 
         merged = merged.sort_values(
             by=["Best6_IPS", "Rounds_Played"],
-            ascending=[False, False]
+            ascending=[False, False],
         ).reset_index(drop=True)
 
         merged.insert(0, "Rank", merged.index + 1)
 
         course_cols = sorted(
-            [c for c in merged.columns if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
+            [c for c in merged.columns
+             if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
         )
         final_cols = ["Rank", "Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
 
@@ -219,7 +279,7 @@ class GOAMCalculator:
             index="Name",
             columns="Course",
             values="Strokes_Over_Par",
-            aggfunc="first"
+            aggfunc="first",
         ).reset_index()
 
         best6 = GOAMCalculator.calculate_strokes(df)
@@ -227,18 +287,22 @@ class GOAMCalculator:
         merged = pivot.merge(best6, on="Name", how="left")
 
         merged = merged.fillna(0)
+
         numeric_cols = merged.columns.drop(["Name"])
-        merged[numeric_cols] = merged[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
-        
+        merged[numeric_cols] = merged[numeric_cols].apply(
+            pd.to_numeric, errors="coerce"
+        ).fillna(0)
+
         merged = merged.sort_values(
             by=["Games_Played", "Best6_Strokes_Over_Par"],
-            ascending=[False, True]
+            ascending=[False, True],
         ).reset_index(drop=True)
 
         merged.insert(0, "Rank", merged.index + 1)
 
         course_cols = sorted(
-            [c for c in merged.columns if c not in ["Rank", "Name", "Best6_Strokes_Over_Par", "Games_Played"]]
+            [c for c in merged.columns
+             if c not in ["Rank", "Name", "Best6_Strokes_Over_Par", "Games_Played"]]
         )
         final_cols = ["Rank", "Name", "Best6_Strokes_Over_Par"] + course_cols + ["Games_Played"]
 

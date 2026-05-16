@@ -125,24 +125,42 @@ def run_scores_app():
     course_sheets = GOAMCalculator.split_by_course(filtered_df)
 
     # -----------------------------
-    # 7. IPS always visible
+    # 7. Leaderboard Selector
     # -----------------------------
-    st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
-    st.dataframe(ips_table, use_container_width=True)
+    st.subheader("🏆 Leaderboards")
+
+    leaderboard_choice = st.selectbox(
+        "Select leaderboard:",
+        ["IPS", "Strokes", "LIV"],
+        index=0  # Default to IPS
+    )
 
     # -----------------------------
-    # 8. Optional sheet viewer
+    # 8. Display selected leaderboard
     # -----------------------------
-    st.subheader("📂 View other tables")
+    if leaderboard_choice == "IPS":
+        st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
+        st.dataframe(ips_table, use_container_width=True)
 
-    options = ["None", "Strokes", "LIV"] + list(course_sheets.keys())
-    choice = st.selectbox("Select table:", options)
-
-    if choice == "Strokes":
+    elif leaderboard_choice == "Strokes":
+        st.subheader("⛳ Strokes Leaderboard (Best 6 Over Par)")
         st.dataframe(strokes_table, use_container_width=True)
-    elif choice == "LIV":
+
+    elif leaderboard_choice == "LIV":
+        st.subheader("🏁 LIV Team Leaderboard (Top 3 IPS per Course)")
         st.dataframe(liv_table, use_container_width=True)
-    elif choice in course_sheets:
+
+
+
+    # -----------------------------
+    # 8.1 View Score Cards
+    # -----------------------------
+    st.subheader("📂 View Score Cards")
+
+    options = ["None"] + list(course_sheets.keys())
+    choice = st.selectbox("Select Course", options)
+
+    if choice in course_sheets:
         st.dataframe(course_sheets[choice], use_container_width=True)
 
     # -----------------------------
