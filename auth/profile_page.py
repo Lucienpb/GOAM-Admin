@@ -1,75 +1,106 @@
 """
-User Profile Page - Self-Service Password Change
+User Profile Page for GOAM Admin
+Allows:
+- Viewing account details
+- Updating profile info
+- Changing password
 """
 
 import streamlit as st
-from auth import change_password, get_user_role
+from datetime import datetime
+from auth.auth_utils import load_users, save_users, hash_password
 
 
-def show_profile_page(user_email: str):
-    """Display user profile page"""
-    st.header("👤 My Profile")
-    
-    # Display user info
+# ========================================================================
+# PROFILE PAGE
+# ========================================================================
+
+def show_profile_page(email: str):
+    st.title("👤 My Profile")
+
+    users = load_users()
+
+    if email not in users:
+        st.error("User not found")
+        return
+
+    user = users[email]
+
+    # ====================================================================
+    # ACCOUNT OVERVIEW
+    # ====================================================================
+
+    st.subheader("Account Information")
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
-        st.write(f"**Email:** {user_email}")
-    
+        st.write(f"**Email:** {email}")
+        st.write(f"**Role:** {user.get('role', 'user').capitalize()}")
+        st.write(f"**Verified:** {'Yes' if user.get('verified') else 'No'}")
+
     with col2:
-        role = get_user_role(user_email)
-        st.write(f"**Role:** {role.capitalize()}")
-    
-    st.divider()
-    
-    # Change password section
+        st.write(f"**Account Created:** {user.get('created', 'N/A')}")
+        st.write(f"**Last Updated:** {user.get('updated', 'N/A')}")
+
+    st.markdown("---")
+
+    # ====================================================================
+    # UPDATE PROFILE DETAILS
+    # ====================================================================
+
+    st.subheader("Update Profile Details")
+
+    name = st.text_input("Full Name", value=user.get("name", ""))
+    phone = st.text_input("Phone Number", value=user.get("phone", ""))
+
+    if st.button("Save Profile", use_container_width=True):
+        user["name"] = name
+        user["phone"] = phone
+        user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        users[email] = user
+        save_users(users)
+
+        st.success("Profile updated successfully!")
+        st.rerun()
+
+    st.markdown("---")
+
+    # ====================================================================
+    # CHANGE PASSWORD
+    # ====================================================================
+
     st.subheader("Change Password")
-    
-    old_password = st.text_input("Current Password", type="password", key="old_pass")
-    new_password = st.text_input("New Password", type="password", key="new_pass")
-    confirm_new_password = st.text_input("Confirm New Password", type="password", key="confirm_new_pass")
-    
-    if st.button("Change Password", use_container_width=True):
-        # Validation
-        if not old_password or not new_password:
-            st.error("All fields are required")
-        elif new_password != confirm_new_password:
+
+    current_pw = st.text_input("Current Password", type="password")
+    new_pw = st.text_input("New Password", type="password")
+    confirm_pw = st.text_input("Confirm New Password", type="password")
+
+    if st.button("Update Password", use_container_width=True):
+        # Validate current password
+        if user["password"] != hash_password(current_pw):
+            st.error("Current password is incorrect")
+            return
+
+        if not new_pw:
+            st.error("New password cannot be empty")
+            return
+
+        if new_pw != confirm_pw:
             st.error("New passwords do not match")
-        elif len(new_password) < 8:
+            return
+
+        if len(new_pw) < 8:
             st.error("Password must be at least 8 characters")
-        elif old_password == new_password:
-            st.error("New password must be different from current password")
-        else:
-            # Change password
-            success, message = change_password(user_email, old_password, new_password)
-            
-            if success:
-                st.success(message)
-                st.balloons()
-            else:
-                st.error(message)
-    
-    st.divider()
-    
-    # Session info
-    st.subheader("Session Information")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if "login_time" in st.session_state:
-            st.write(f"**Logged in since:** {st.session_state.login_time}")
-    
-    with col2:
-        if st.button("Logout", use_container_width=True, key="profile_logout"):
-            st.session_state.authenticated = False
-            st.session_state.email = None
-            if "login_time" in st.session_state:
-                del st.session_state.login_time
-            if "last_activity" in st.session_state:
-                del st.session_state.last_activity
-            st.rerun()
+            return
 
+        # Update password
+        user["password"] = hash_password(new_pw)
+        user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-if __name__ == "__main__":
-    show_profile_page("user@example.com")
+        users[email] = user
+        save_users(users)
+
+        st.success("Password updated successfully!")
+        st.rerun()
