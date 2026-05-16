@@ -254,7 +254,7 @@ class GOAMCalculator:
 
         course_cols = sorted(
             [c for c in merged.columns
-             if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
+            if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
         )
         final_cols = ["Rank", "Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
 
