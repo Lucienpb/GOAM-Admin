@@ -12,8 +12,9 @@ import json
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
-from auth.auth_utils import load_users, hash_password
+from auth.auth import load_users, verify_password, USERS_FILE
 
 # ========================================================================
 # THROTTLE / LOCKOUT SETTINGS
@@ -104,7 +105,7 @@ def show_login_page():
 
     if not login_btn:
         return
-
+    st.info(f"DEBUG: Using users.json at: {Path(USERS_FILE).resolve()}")
     users = load_users()
 
     # --- VALIDATION ---
@@ -114,6 +115,8 @@ def show_login_page():
 
     if email not in users:
         st.error("No account found with that email")
+        # Show the absolute path of the users.json file being used
+        st.info(f"Using users.json at: {Path(USERS_FILE).resolve()}")
         return
 
     # --- LOCKOUT CHECK ---
@@ -131,7 +134,7 @@ def show_login_page():
         return
 
     # --- PASSWORD CHECK ---
-    if user["password"] != hash_password(password):
+    if not verify_password(password, user["password_hash"]):
         record_failed_attempt(email)
         attempts = get_login_attempts(email)["failed"]
 
@@ -150,6 +153,6 @@ def show_login_page():
     st.session_state.authenticated = True
     st.session_state.email = email
     st.session_state.role = user.get("role", "user")
-    st.session_state.login_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.login_time = datetime.now()
 
     st.rerun()

@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 
 # AUTH MODULES
-from auth.auth_utils import verify_token, verify_user_email, reset_password, get_user_role
+from auth.auth import verify_token, verify_user_email, reset_password, get_user_role
 from auth.login_page import show_login_page
 from auth.profile_page import show_profile_page
 from auth.admin_page import show_admin_page
@@ -13,7 +13,7 @@ from apps.handicap_app import run as run_handicap_app
 from apps.scores_app import run_scores_app
 from utils.handicap_calculator import load_course_data
 from utils.handicap_scraper import test_login
-
+SESSION_TIMEOUT = 3600  # 1 hour
 # ========================================================================
 # CONFIG (MUST BE FIRST STREAMLIT COMMAND)
 # ========================================================================
@@ -210,7 +210,7 @@ if page == "Dashboard":
     col1, col2, col3 = st.columns(3)
     col1.metric("Role", role.capitalize())
     col2.metric("Account", "Verified")
-    col3.metric("Login Time", st.session_state.login_time)
+    col3.metric("Login Time", st.session_state.login_time.strftime("%H:%M:%S"))
 
 elif page == "⛳ Pairing Matrix":
     run_pairing_app()

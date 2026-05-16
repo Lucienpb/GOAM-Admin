@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 # USER DATABASE (JSON FILE)
 # ========================================================================
 
-USER_DB_PATH = "auth/users.json"
+USER_DB_PATH = "goam-admin/data/users.json"
 
 def load_users():
     """Load user database"""

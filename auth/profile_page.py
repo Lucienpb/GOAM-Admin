@@ -8,7 +8,7 @@ Allows:
 
 import streamlit as st
 from datetime import datetime
-from auth.auth_utils import load_users, save_users, hash_password
+from auth.auth import load_users, save_users, hash_password
 
 
 # ========================================================================

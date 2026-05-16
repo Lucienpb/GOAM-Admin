@@ -1,6 +1,6 @@
 {
-  "Lucienpb@gmail.com": {
-    "password_hash": "$2b$12$IA5ATKM167DqGbLRRe285urVGIIrMXJz7yZ3HHY3K1kAJ43BatFVO",
+  "lucienpb@gmail.com": {
+    "password_hash": "$2b$12$RQlgxZY3Ri1IhFsraRqCjuIgzchP25rCjk/vuygvOPIy7JHueo/ka",
     "role": "admin",
     "verified": true,
     "created_at": "2026-05-16T18:44:00"

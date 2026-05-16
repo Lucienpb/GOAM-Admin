@@ -20,10 +20,10 @@ import bcrypt
 # ========================================================================
 # CONFIGURATION
 # ========================================================================
-
-USERS_FILE = Path("data/users.json")
-AUDIT_LOG_FILE = Path("logs/auth_audit.log")
-TOKEN_STORE_FILE = Path("data/tokens.json")
+BASE_DIR = Path(__file__).parent.parent
+USERS_FILE = BASE_DIR  / "data" / "users.json"
+AUDIT_LOG_FILE = BASE_DIR / "logs" / "auth_audit.log"
+TOKEN_STORE_FILE = BASE_DIR / "data" / "tokens.json"
 
 # Email Configuration
 SMTP_SERVER = "smtp.gmail.com"  # Change to your SMTP server
