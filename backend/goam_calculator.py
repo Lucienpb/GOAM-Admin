@@ -191,7 +191,12 @@ class GOAMCalculator:
     def build_liv_leaderboard(df):
         """
         Returns LIV leaderboard in Excel/UI format:
-        Team | LIV Total | Strength Index | Trend | <courses...> (ordered by month)
+        Team | LIV Total | Strength Index | Trend Index | <courses...> (ordered by month)
+        
+        Trend Index: Compares current average (all courses) to previous average (all except latest)
+        - ↑ Current average > Previous average (Improving)
+        - ↓ Current average < Previous average (Declining)
+        - → Current average = Previous average (Stable)
         """
         liv_raw = GOAMCalculator.calculate_liv(df)
 
@@ -206,43 +211,48 @@ class GOAMCalculator:
             aggfunc="first",
         ).fillna(0)
 
-        # LIV Total
-        pivot["LIV Total"] = pivot.sum(axis=1)
+        # Get active courses sorted by month (before calculating totals)
+        active_courses = GOAMCalculator.get_active_courses(df)
+        # Filter to only include courses that exist in this leaderboard
+        active_courses = [c for c in active_courses if c in pivot.columns]
 
-        # Strength Index = average points per course played
-        course_cols = [c for c in pivot.columns if c != "LIV Total"]
-        played_counts = pivot[course_cols].astype(bool).sum(axis=1)
+        # LIV Total (only from active courses)
+        pivot["LIV Total"] = pivot[active_courses].sum(axis=1)
+
+        # Strength Index = average points per active course played
+        played_counts = pivot[active_courses].astype(bool).sum(axis=1)
         pivot["Strength Index"] = (
-            pivot[course_cols].sum(axis=1) / played_counts.replace(0, pd.NA)
+            pivot[active_courses].sum(axis=1) / played_counts.replace(0, pd.NA)
         ).round(1)
+
+        # Trend Index: Compare current average to previous average
+        trend_indicators = []
+        for team in pivot.index:
+            if len(active_courses) < 2:
+                # Not enough courses to compare
+                trend_indicators.append("–")
+            else:
+                # Current average = all active courses
+                current_avg = pivot.loc[team, active_courses].mean()
+                
+                # Previous average = all active courses except the latest
+                previous_courses = active_courses[:-1]
+                previous_avg = pivot.loc[team, previous_courses].mean()
+                
+                if current_avg > previous_avg:
+                    trend_indicators.append("↑")
+                elif current_avg < previous_avg:
+                    trend_indicators.append("↓")
+                else:
+                    trend_indicators.append("→")
+        
+        pivot["Trend Index"] = trend_indicators
 
         # Sort by LIV Total
         pivot = pivot.sort_values(by="LIV Total", ascending=False)
 
-        # Ranking arrows (relative to previous row)
-        arrows = []
-        prev = None
-        for total in pivot["LIV Total"]:
-            if prev is None:
-                arrows.append("–")
-            else:
-                if total > prev:
-                    arrows.append("↑")
-                elif total < prev:
-                    arrows.append("↓")
-                else:
-                    arrows.append("→")
-            prev = total
-
-        pivot["Trend"] = arrows
-
-        # Get active courses sorted by month
-        active_courses = GOAMCalculator.get_active_courses(df)
-        # Filter to only include courses that exist in this leaderboard
-        active_courses = [c for c in active_courses if c in course_cols]
-
-        # Final column order: Team | LIV Total | Strength Index | Trend | <courses by month>
-        final_cols = ["LIV Total", "Strength Index", "Trend"] + active_courses
+        # Final column order: Team | LIV Total | Strength Index | Trend Index | <courses by month>
+        final_cols = ["LIV Total", "Strength Index", "Trend Index"] + active_courses
         final = pivot[final_cols].reset_index()  # Team becomes a column
 
         return final
