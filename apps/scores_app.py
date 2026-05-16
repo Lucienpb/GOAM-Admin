@@ -127,6 +127,14 @@ def run_scores_app():
     liv_table = GOAMCalculator.build_liv_leaderboard(filtered_df)
     course_sheets = GOAMCalculator.split_by_course(filtered_df)
 
+    # Update position history for position change tracking
+    rounds.update_position_history(ips_table)
+    
+    # Apply position changes to IPS leaderboard
+    if not ips_table.empty:
+        ips_table = ips_table.copy()
+        ips_table["Pos Change"] = ips_table["Name"].apply(lambda x: rounds.get_position_change(x))
+
     # -----------------------------
     # 7. Leaderboard Selector
     # -----------------------------

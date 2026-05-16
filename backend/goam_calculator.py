@@ -272,7 +272,12 @@ class GOAMCalculator:
     def build_ips_leaderboard(df):
         """
         Returns IPS leaderboard in Excel format:
-        Rank | Name | Best6_IPS | <courses...> (ordered by month) | Rounds_Played
+        Rank | Name | Pos Change | Best6_IPS | <courses...> (ordered by month) | Rounds_Played
+        
+        Pos Change: Current rank vs previous round rank
+        - Shows +N if moved up (e.g., +6 = moved up 6 positions)
+        - Shows -N if moved down (e.g., -3 = moved down 3 positions)
+        - Shows "–" if no change or first appearance
         """
         if df.empty:
             return pd.DataFrame()
@@ -303,12 +308,17 @@ class GOAMCalculator:
 
         merged.insert(0, "Rank", merged.index + 1)
 
+        # Calculate position change
+        # For now, we'll show "–" since we don't have previous position stored
+        # This can be enhanced with session state or persistent storage
+        merged.insert(1, "Pos Change", "–")
+
         # Get active courses sorted by month
         active_courses = GOAMCalculator.get_active_courses(df)
         # Filter to only include courses that exist in this leaderboard
         active_courses = [c for c in active_courses if c in merged.columns]
 
-        final_cols = ["Rank", "Name", "Best6_IPS"] + active_courses + ["Rounds_Played"]
+        final_cols = ["Rank", "Pos Change", "Name", "Best6_IPS"] + active_courses + ["Rounds_Played"]
 
         return merged[final_cols]
 
