@@ -121,7 +121,7 @@ def run_scores_app():
     # -----------------------------
     ips_table = GOAMCalculator.build_ips_leaderboard(filtered_df)
     strokes_table = GOAMCalculator.build_strokes_leaderboard(filtered_df)
-    liv_table = GOAMCalculator.calculate_liv(filtered_df)
+    liv_table = GOAMCalculator.build_liv_leaderboard(filtered_df)
     course_sheets = GOAMCalculator.split_by_course(filtered_df)
 
     # -----------------------------
