@@ -44,7 +44,7 @@ def run_scores_app():
 
     course_for_upload = st.selectbox(
         "Course:",
-        ["Akasia", "PGC", "Kyalami", "Copperleaf", "Services"],
+        ["Akasia", "PGC", "Kyalami", "CopperLeaf", "Services"],
         key="scorecard_course"
     )
 
@@ -74,7 +74,7 @@ def run_scores_app():
         with col2:
             course_manual = st.selectbox(
                 "Course",
-                ["Akasia", "PGC", "Kyalami", "Copperleaf", "Services"]
+                ["Akasia", "PGC", "Kyalami", "CopperLeaf", "Services"]
             )
         with col3:
             strokes = st.number_input("Strokes", min_value=40, max_value=140)

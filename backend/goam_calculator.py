@@ -23,7 +23,7 @@ class GOAMCalculator:
         "Akasia": 2,      # February
         "PGC": 3,         # March
         "Kyalami": 4,     # April
-        "Copperleaf": 5,  # May
+        "CopperLeaf": 5,  # May
         "Services": 6,    # June
     }
 
