@@ -107,11 +107,14 @@ def run_scores_app():
     st.subheader("🎯 Select courses to include in leaderboards")
 
     all_courses = GOAMCalculator.list_courses(all_rounds_df)
+    
+    # Get active courses (month <= current month) for default selection
+    active_courses = GOAMCalculator.get_active_courses(all_rounds_df)
 
     selected_courses = st.multiselect(
         "Only include these courses:",
         all_courses,
-        default=all_courses
+        default=active_courses  # Default to active courses only
     )
 
     filtered_df = all_rounds_df[all_rounds_df["Course"].isin(selected_courses)]

@@ -80,9 +80,17 @@ class GOAMCalculator:
     # ---------------------------------------------------------
     @staticmethod
     def list_courses(df):
+        """Get list of courses sorted by month (only active courses)"""
         if df.empty:
             return []
-        return sorted(df["Course"].dropna().unique().tolist())
+        
+        all_courses = df["Course"].dropna().unique().tolist()
+        
+        # Filter to only active courses and sort by month
+        active_courses = GOAMCalculator.get_active_courses(df)
+        
+        # Return only active courses that exist in data
+        return [c for c in active_courses if c in all_courses]
 
     # ---------------------------------------------------------
     # Best 6 IPS (core numbers only)
