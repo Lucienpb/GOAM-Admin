@@ -18,6 +18,34 @@ class GOAMCalculator:
 
     PAR = 72
 
+    # Course to Month mapping (month number)
+    COURSE_MONTHS = {
+        "Akasia": 2,      # February
+        "PGC": 3,         # March
+        "Kyalami": 4,     # April
+        "Copperleaf": 5,  # May
+        "Services": 6,    # June
+    }
+
+    @staticmethod
+    def get_active_courses(df):
+        """
+        Get courses that have been played in months <= current month.
+        Returns list of courses sorted by month order.
+        """
+        current_month = datetime.now().month
+        
+        # Filter courses by month <= current month
+        active_courses = [
+            course for course, month in GOAMCalculator.COURSE_MONTHS.items()
+            if month <= current_month and course in df["Course"].unique()
+        ]
+        
+        # Sort by month order (using COURSE_MONTHS values)
+        active_courses.sort(key=lambda x: GOAMCalculator.COURSE_MONTHS.get(x, 999))
+        
+        return active_courses
+
     # ---------------------------------------------------------
     # Build long-format table from course sheets
     # ---------------------------------------------------------
@@ -163,7 +191,7 @@ class GOAMCalculator:
     def build_liv_leaderboard(df):
         """
         Returns LIV leaderboard in Excel/UI format:
-        Team | LIV Total | Strength Index | Trend | <courses...>
+        Team | LIV Total | Strength Index | Trend | <courses...> (ordered by month)
         """
         liv_raw = GOAMCalculator.calculate_liv(df)
 
@@ -208,8 +236,13 @@ class GOAMCalculator:
 
         pivot["Trend"] = arrows
 
-        # Final column order
-        final_cols = ["LIV Total", "Strength Index", "Trend"] + sorted(course_cols)
+        # Get active courses sorted by month
+        active_courses = GOAMCalculator.get_active_courses(df)
+        # Filter to only include courses that exist in this leaderboard
+        active_courses = [c for c in active_courses if c in course_cols]
+
+        # Final column order: Team | LIV Total | Strength Index | Trend | <courses by month>
+        final_cols = ["LIV Total", "Strength Index", "Trend"] + active_courses
         final = pivot[final_cols].reset_index()  # Team becomes a column
 
         return final
@@ -221,7 +254,7 @@ class GOAMCalculator:
     def build_ips_leaderboard(df):
         """
         Returns IPS leaderboard in Excel format:
-        Rank | Name | Best6_IPS | <courses...> | Rounds_Played
+        Rank | Name | Best6_IPS | <courses...> (ordered by month) | Rounds_Played
         """
         if df.empty:
             return pd.DataFrame()
@@ -252,11 +285,12 @@ class GOAMCalculator:
 
         merged.insert(0, "Rank", merged.index + 1)
 
-        course_cols = sorted(
-            [c for c in merged.columns
-            if c not in ["Rank", "Name", "Best6_IPS", "Rounds_Played"]]
-        )
-        final_cols = ["Rank", "Name", "Best6_IPS"] + course_cols + ["Rounds_Played"]
+        # Get active courses sorted by month
+        active_courses = GOAMCalculator.get_active_courses(df)
+        # Filter to only include courses that exist in this leaderboard
+        active_courses = [c for c in active_courses if c in merged.columns]
+
+        final_cols = ["Rank", "Name", "Best6_IPS"] + active_courses + ["Rounds_Played"]
 
         return merged[final_cols]
 
@@ -267,7 +301,7 @@ class GOAMCalculator:
     def build_strokes_leaderboard(df):
         """
         Returns Strokes leaderboard in Excel format:
-        Rank | Name | Best6_Strokes_Over_Par | <courses...> | Games_Played
+        Rank | Name | Best6_Strokes_Over_Par | <courses...> (ordered by month) | Games_Played
         """
         if df.empty:
             return pd.DataFrame()
@@ -300,11 +334,12 @@ class GOAMCalculator:
 
         merged.insert(0, "Rank", merged.index + 1)
 
-        course_cols = sorted(
-            [c for c in merged.columns
-             if c not in ["Rank", "Name", "Best6_Strokes_Over_Par", "Games_Played"]]
-        )
-        final_cols = ["Rank", "Name", "Best6_Strokes_Over_Par"] + course_cols + ["Games_Played"]
+        # Get active courses sorted by month
+        active_courses = GOAMCalculator.get_active_courses(df)
+        # Filter to only include courses that exist in this leaderboard
+        active_courses = [c for c in active_courses if c in merged.columns]
+
+        final_cols = ["Rank", "Name", "Best6_Strokes_Over_Par"] + active_courses + ["Games_Played"]
 
         return merged[final_cols]
 
