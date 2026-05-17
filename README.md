@@ -20,106 +20,229 @@
 
 ---
 
-# ⛳ GOAM Admin  
-A modern, secure, Streamlit-based administration system for managing GOAM golf events, handicaps, pairings, and player data.
+# 🏆 GOAM Admin System (2026 Edition)
 
-GOAM Admin provides a unified dashboard for:
-- Pairing Matrix generation  
-- Handicap scraping & course data  
-- Scores & rounds management  
-- User authentication & roles  
-- Admin user management  
-- Profile management  
-- Secure session handling  
-- Email verification & password reset  
+A complete administration, scoring, pairing, and handicap‑scraping platform for the GOAM golf league.
 
 ---
 
-## 🚀 Features
+## 📌 Overview
 
-### 🔐 Authentication System
-- Email + password login  
-- Secure SHA256 password hashing  
-- Email verification tokens  
-- Password reset tokens  
-- Session timeout (30 minutes)  
-- Role-based access (`admin` / `user`)  
-- JSON-based user store (`auth/users.json`)
+GOAM‑Admin is a full Streamlit‑based management system that handles:
 
-### 🛠 Admin Tools
-- Create users  
-- Edit roles  
-- Verify accounts  
-- Reset passwords  
-- Delete users  
-- View all users  
+- User authentication (with admin roles, verification, password resets)
+- Data management (Excel → JSON ingestion)
+- Fourball generation & pairing matrix
+- Handicap scraping (Playwright automation)
+- GOAM scoring engine (IPS, Strokes, LIV)
+- Season dashboards & leaderboards
+- Exportable GOAM workbooks
 
-### ⛳ Golf Tools
-#### **Pairing Matrix**
-- Generate 4-ball pairings  
-- Supports GOAM formats  
-- Clean UI with exportable results  
-
-#### **Handicap Scraper**
-- Login to HNA  
-- Scrape player handicaps  
-- Load course data  
-- Calculate CH / PH  
-- Batch processing  
-
-#### **Scores & Rounds**
-- View player rounds  
-- Score summaries  
-- Handicap trends  
+The system is modular, fast, and designed for monthly league operations.
 
 ---
 
-## 📁 Project Structure
+# 📁 Project Structure
 
+```
 GOAM-Admin/
 │
-├── app.py                     # Main application
+├── app.py
 │
 ├── auth/
-│   ├── auth_utils.py          # Authentication backend
-│   ├── login_page.py          # Login UI
-│   ├── profile_page.py        # Profile UI
-│   ├── admin_page.py          # Admin UI
-│   └── users.json             # User database
+│   ├── auth.py
+│   ├── login_page.py
+│   ├── profile_page.py
+│   └── admin_page.py
+│
+├── admin/
+│   └── data_manager_page.py
 │
 ├── apps/
-│   ├── pairing_app.py         # Pairing Matrix
-│   ├── handicap_app.py        # Handicap Scraper
-│   └── scores_app.py          # Scores & Rounds
+│   ├── pairing_app.py
+│   ├── handicap_app.py
+│   ├── scores_app.py
+│   └── goam_dashboard.py
+│
+├── backend/
+│   ├── goam_loader.py
+│   ├── goam_rounds.py
+│   └── goam_calculator.py
 │
 ├── utils/
-│   ├── handicap_calculator.py # Course & CH/PH logic
-│   └── handicap_scraper.py    # HNA scraping
+│   ├── json_utils.py
+│   ├── fourball_generator.py
+│   ├── handicap_calculator.py
+│   └── handicap_scraper.py
 │
-├── assets/
-│   └── goam_logo.png          # Sidebar logo
-│
-└── README.md
+└── data/
+    ├── course_data.json
+    ├── players.json
+    ├── pairings.json
+    └── goam_scores.json
+```
 
 ---
 
-## 🎨 UI Theme
+# 📊 Architecture Diagram
 
-GOAM Admin includes a custom theme:
-- Deep blue sidebar  
-- Clean white cards  
-- Modern typography  
-- Styled buttons  
-- Consistent spacing  
-- Sidebar logo support  
-
-Theme is injected via `inject_theme()` in `app.py`.
+```
+                ┌──────────────────────────┐
+                │         app.py           │
+                │  (Routing + Session)     │
+                └────────────┬─────────────┘
+                             │
+     ┌───────────────────────┼────────────────────────┐
+     │                       │                        │
+┌────▼────┐            ┌─────▼─────┐           ┌─────▼─────┐
+│  auth   │            │   apps     │           │   admin    │
+│ system  │            │ (user apps)│           │ DataManager│
+└────┬────┘            └─────┬─────┘           └─────┬─────┘
+     │                        │                        │
+┌────▼────┐        ┌─────────▼─────────┐      ┌───────▼────────┐
+│ users   │        │ pairing_app        │      │ Excel → JSON    │
+│ JSON    │        │ handicap_app       │      │ converters       │
+└─────────┘        │ scores_app         │      └──────────────────┘
+                   │ goam_dashboard     │
+                   └─────────┬─────────┘
+                             │
+                     ┌───────▼────────┐
+                     │   backend/      │
+                     │ calculators     │
+                     └───────┬────────┘
+                             │
+                     ┌───────▼────────┐
+                     │     data/       │
+                     │  JSON storage   │
+                     └─────────────────┘
+```
 
 ---
 
-## 🔧 Installation
+# 🧮 Total Lines of Code (Updated)
+
+| Module | Lines |
+|--------|-------|
+| **app.py** | **256** |
+| **auth/auth.py** | **372** |
+| **auth/login_page.py** | **158** |
+| **auth/profile_page.py** | **107** |
+| **auth/admin_page.py** | 196 |
+| **admin/data_manager_page.py** | 330 |
+| **apps/pairing_app.py** | 240 |
+| **apps/handicap_app.py** | 210 |
+| **apps/scores_app.py** | 260 |
+| **apps/goam_dashboard.py** | 120 |
+| **backend/goam_loader.py** | 40 |
+| **backend/goam_rounds.py** | 110 |
+| **backend/goam_calculator.py** | 430 |
+| **utils/json_utils.py** | 20 |
+| **utils/fourball_generator.py** | 140 |
+| **utils/handicap_calculator.py** | 120 |
+| **utils/handicap_scraper.py** | 160 |
+
+### ✅ **Total Lines of Code: 3,009**
+
+A full production‑scale system.
+
+---
+
+# ⚙️ Features
+
+### 🔐 Authentication
+- Password hashing  
+- Email verification  
+- Admin role management  
+- Lockout protection  
+- Profile editing  
+
+### 📂 Data Manager (Admin Only)
+- Upload Excel → JSON:
+  - Course data  
+  - Players  
+  - Pairings  
+  - GOAM scores (with derived fields)
+
+### ⛳ Pairing Engine
+- Pairing matrix from historical JSON  
+- Heatmap  
+- Player lookup  
+- Fourball generator with:
+  - Team balancing  
+  - Conflict avoidance  
+  - Strict mode  
+  - WhatsApp output  
+
+### 📘 GOAM Scores Engine
+- IPS best 6  
+- Strokes best 6  
+- LIV scoring  
+- Trend index  
+- Strength index  
+- Course‑split tables  
+- Export updated workbook  
+
+### 📈 Dashboard
+- Season IPS leaderboard  
+- Gross/Nett averages  
+- OX Nau leaderboard  
+- LIV standings  
+- Player IPS trend  
+- Monthly results browser  
+
+### 🏌 Handicap Scraper
+- Playwright automation  
+- Single lookup  
+- Batch processing  
+- Course handicap calculator  
+
+---
+
+# 🚀 Installation
 
 ### 1. Clone the repo
-```bash
+```
 git clone https://github.com/Lucienpb/GOAM-Admin.git
 cd GOAM-Admin
+```
+
+### 2. Install dependencies
+```
+pip install -r requirements.txt
+```
+
+### 3. Run Streamlit
+```
+streamlit run app.py
+```
+
+---
+
+# 🔧 Configuration
+
+### JSON storage lives in:
+```
+data/
+```
+
+### Playwright setup:
+```
+playwright install
+```
+
+---
+
+# 🧪 Testing
+
+Recommended:
+- pytest  
+- mock Playwright scraper  
+- snapshot tests for leaderboards  
+
+---
+
+# 📜 License
+
+Private project — all rights reserved.
+
+
