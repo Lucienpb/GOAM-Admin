@@ -9,7 +9,7 @@ Allows:
 # TOP OF FILE
 import streamlit as st
 from datetime import datetime
-from auth.auth import load_users, save_users, hash_password, verify_password, change_password
+from auth.auth import load_users, save_users, verify_password, change_password
 
 
 # ========================================================================

@@ -14,10 +14,9 @@ from datetime import datetime
 from auth.auth import (
     load_users,
     save_users,
-    hash_password,
-    create_user
+    create_user,
+    reset_password
 )
-
 
 # ========================================================================
 # ADMIN PAGE
@@ -73,21 +72,21 @@ def show_admin_page(admin_email: str):
             col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
 
             with col1:
-                st.write(f"**Role:** {user.get('role', 'user').capitalize()}")
+                st.write(f"**Role:** {user.get('role', 'member').capitalize()}")
                 st.write(f"**Verified:** {'Yes' if user.get('verified') else 'No'}")
-                st.write(f"**Created:** {user.get('created', 'N/A')}")
-                st.write(f"**Updated:** {user.get('updated', 'N/A')}")
+                st.write(f"**Created:** {user.get('created_at', 'N/A')}")
+                st.write(f"**Updated:** {user.get('updated_at', 'N/A')}")
 
             with col2:
                 new_role = st.selectbox(
                     f"Role for {email}",
                     ["member", "admin"],
-                    index=0 if user.get("role") == "user" else 1,
+                    index=0 if user.get("role") == "member" else 1,
                     key=f"role_{email}"
                 )
                 if st.button(f"Update Role ({email})"):
                     user["role"] = new_role
-                    user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    user["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     users[email] = user
                     save_users(users)
                     st.success("Role updated")
@@ -97,7 +96,7 @@ def show_admin_page(admin_email: str):
                 if not user.get("verified"):
                     if st.button(f"Verify {email}"):
                         user["verified"] = True
-                        user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        user["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         users[email] = user
                         save_users(users)
                         st.success("User verified")
@@ -112,12 +111,15 @@ def show_admin_page(admin_email: str):
                     if len(new_pw) < 8:
                         st.error("Password must be at least 8 characters")
                     else:
-                        user["password_hash"] = hash_password(new_pw)
-                        user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        users[email] = user
-                        save_users(users)
-                        st.success("Password updated")
-                        st.rerun()
+                        ok, msg = reset_password(email, new_pw)
+                        if ok:
+                            user["updated_at"] = datetime.now().isoformat()
+                            users[email] = user
+                            save_users(users)
+                            st.success("Password updated")
+                            st.rerun()
+                        else:
+                            st.error(msg)
 
             with col4:
                 if email != admin_email:
