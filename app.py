@@ -192,6 +192,7 @@ menu = [
     "⛳ Pairing Matrix",
     "🏌️ Handicap Scraper",
     "📘 GOAM Scores & Rounds",
+    "🏆 GOAM Season Dashboard",   # <-- ADD THIS
     "My Profile"
 ]
 
@@ -236,7 +237,9 @@ elif page == "🏌️ Handicap Scraper":
 
 elif page == "📘 GOAM Scores & Rounds":
     run_scores_app()
-
+elif page == "🏆 GOAM Season Dashboard":
+    from apps.goam_dashboard import run
+    run()
 elif page == "My Profile":
     show_profile_page(st.session_state.email)
 
