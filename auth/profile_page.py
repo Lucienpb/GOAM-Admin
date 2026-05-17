@@ -79,6 +79,7 @@ def show_profile_page(email: str):
     confirm_pw = st.text_input("Confirm New Password", type="password")
 
     if st.button("Update Password", use_container_width=True):
+
         # Validate current password
         if not verify_password(current_pw, user["password_hash"]):
             st.error("Current password is incorrect")
@@ -96,10 +97,11 @@ def show_profile_page(email: str):
             st.error("Password must be at least 8 characters")
             return
 
-success, msg = change_password(email, current_pw, new_pw)
+        # Use central auth system to change password
+        success, msg = change_password(email, current_pw, new_pw)
 
-       if success:
-           st.success(msg)
-           st.rerun()
-       else:
-           st.error(msg)
+        if success:
+            st.success(msg)
+            st.rerun()
+        else:
+            st.error(msg)
