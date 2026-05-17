@@ -6,9 +6,10 @@ Allows:
 - Changing password
 """
 
+# TOP OF FILE
 import streamlit as st
 from datetime import datetime
-from auth.auth import load_users, save_users, hash_password
+from auth.auth import load_users, save_users, hash_password, verify_password
 
 
 # ========================================================================
@@ -36,7 +37,7 @@ def show_profile_page(email: str):
 
     with col1:
         st.write(f"**Email:** {email}")
-        st.write(f"**Role:** {user.get('role', 'user').capitalize()}")
+        st.write(f"**Role:** {user.get('role', 'member').capitalize()}")
         st.write(f"**Verified:** {'Yes' if user.get('verified') else 'No'}")
 
     with col2:
@@ -79,7 +80,7 @@ def show_profile_page(email: str):
 
     if st.button("Update Password", use_container_width=True):
         # Validate current password
-        if user["password"] != hash_password(current_pw):
+        if not verify_password(current_pw, user["password_hash"]):
             st.error("Current password is incorrect")
             return
 
@@ -96,7 +97,7 @@ def show_profile_page(email: str):
             return
 
         # Update password
-        user["password"] = hash_password(new_pw)
+        user["password_hash"] = hash_password(new_pw)
         user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         users[email] = user

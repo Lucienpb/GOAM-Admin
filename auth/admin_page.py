@@ -37,7 +37,7 @@ def show_admin_page(admin_email: str):
     with st.expander("Add User"):
         new_email = st.text_input("Email")
         new_password = st.text_input("Password", type="password")
-        new_role = st.selectbox("Role", ["user", "admin"])
+        new_role = st.selectbox("Role", ["member", "admin"])
 
         if st.button("Create User", use_container_width=True):
             if not new_email or not new_password:
@@ -81,7 +81,7 @@ def show_admin_page(admin_email: str):
             with col2:
                 new_role = st.selectbox(
                     f"Role for {email}",
-                    ["user", "admin"],
+                    ["member", "admin"],
                     index=0 if user.get("role") == "user" else 1,
                     key=f"role_{email}"
                 )
@@ -112,7 +112,7 @@ def show_admin_page(admin_email: str):
                     if len(new_pw) < 8:
                         st.error("Password must be at least 8 characters")
                     else:
-                        user["password"] = hash_password(new_pw)
+                        user["password_hash"] = hash_password(new_pw)
                         user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         users[email] = user
                         save_users(users)
