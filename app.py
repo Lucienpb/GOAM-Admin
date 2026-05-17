@@ -197,7 +197,7 @@ menu = [
 
 if role == "admin":
     menu.append("User Management")
-
+    menu.append("📂 Data Manager")   # <-- NEW
 menu.append("Logout")
 
 page = st.sidebar.radio("Navigation", menu)
@@ -241,6 +241,7 @@ elif page == "My Profile":
     show_profile_page(st.session_state.email)
 
 elif page == "User Management":
+    from admin.data_manager_page import show_data_manager_page
     show_admin_page(st.session_state.email)
 
 elif page == "Logout":
