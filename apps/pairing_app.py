@@ -156,37 +156,36 @@ def run():
 
         st.subheader("📲 WhatsApp Text")
         st.text_area("Copy & paste to WhatsApp:", "\n".join(whatsapp_lines), height=150)
-# -------------------------------------------------------------------
-# SAVE GENERATED FOURBALLS BACK INTO JSON HISTORY
-# -------------------------------------------------------------------
-st.subheader("💾 Save Fourballs to GOAM History")
+    # -------------------------------------------------------------------
+    # ADMIN-ONLY: SAVE GENERATED FOURBALLS BACK INTO JSON HISTORY
+    # -------------------------------------------------------------------
+    if st.session_state.get("authenticated") and st.session_state.get("role") == "admin":
 
-month_key = st.text_input("Month Key (e.g., Jun'26)")
-course_name = st.text_input("Course Name (e.g., Copperleaf)")
+        st.subheader("💾 Save Fourballs to GOAM History")
 
-if st.button("Save Fourballs to History"):
-    if not month_key.strip():
-        st.error("Month key is required.")
-    elif not course_name.strip():
-        st.error("Course name is required.")
-    else:
-        # Load existing JSON
-        pairings_json = load_json("data/pairings.json")
+        month_key = st.text_input("Month Key (e.g., Jun'26)")
+        course_name = st.text_input("Course Name (e.g., Copperleaf)")
 
-        # Build JSON structure for this month
-        new_month_data = {
-            "course": course_name.strip(),
-            "fourballs": [
-                {
-                    "fourball": i + 1,
-                    "players": g
+        if st.button("Save Fourballs to History"):
+            if not month_key.strip():
+                st.error("Month key is required.")
+            elif not course_name.strip():
+                st.error("Course name is required.")
+            else:
+                pairings_json = load_json("data/pairings.json")
+
+                new_month_data = {
+                    "course": course_name.strip(),
+                    "fourballs": [
+                        {
+                            "fourball": i + 1,
+                            "players": g
+                        }
+                        for i, g in enumerate(final_groups)
+                    ]
                 }
-                for i, g in enumerate(final_groups)
-            ]
-        }
 
-        # Save/overwrite this month
-        pairings_json[month_key.strip()] = new_month_data
-        save_json("data/pairings.json", pairings_json)
+                pairings_json[month_key.strip()] = new_month_data
+                save_json("data/pairings.json", pairings_json)
 
-        st.success(f"Fourballs saved under {month_key}!")
+                st.success(f"Fourballs saved under {month_key}!")

@@ -1,6 +1,12 @@
+#-------------------------------
+# GOAM ADMIN APP
+#-------------------------------
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 from datetime import datetime, timedelta
-#------------------
+
 # AUTH MODULES
 from auth.auth import verify_token, verify_user_email, reset_password, get_user_role
 from auth.login_page import show_login_page
@@ -13,9 +19,11 @@ from apps.handicap_app import run as run_handicap_app
 from apps.scores_app import run_scores_app
 from utils.handicap_calculator import load_course_data
 from utils.handicap_scraper import test_login
+
 SESSION_TIMEOUT = 3600  # 1 hour
+
 # ========================================================================
-# CONFIG (MUST BE FIRST STREAMLIT COMMAND)
+# CONFIG
 # ========================================================================
 st.set_page_config(
     page_title="GOAM Admin",
@@ -25,7 +33,7 @@ st.set_page_config(
 )
 
 # ========================================================================
-# THEME INJECTION
+# THEME
 # ========================================================================
 def inject_theme():
     st.markdown("""
@@ -101,16 +109,28 @@ def init_session():
 init_session()
 
 # ========================================================================
-# SESSION TIMEOUT
+# SESSION TIMEOUT (FIXED)
 # ========================================================================
 def check_timeout():
-    if not st.session_state.authenticated:
+    if not st.session_state.get("authenticated"):
         return
 
-    last = st.session_state.last_activity
-    if isinstance(last, str):
-        last = datetime.fromisoformat(last)
+    last = st.session_state.get("last_activity")
 
+    # Fix: initialize if missing
+    if last is None:
+        st.session_state["last_activity"] = datetime.now()
+        return
+
+    # Fix: convert string timestamps
+    if isinstance(last, str):
+        try:
+            last = datetime.fromisoformat(last)
+        except:
+            st.session_state["last_activity"] = datetime.now()
+            return
+
+    # Timeout check
     if datetime.now() - last > timedelta(seconds=SESSION_TIMEOUT):
         st.warning("Session expired. Please login again.")
         st.session_state.authenticated = False
@@ -120,6 +140,7 @@ def check_timeout():
         st.session_state.last_activity = None
         st.rerun()
 
+    # Update activity timestamp
     st.session_state.last_activity = datetime.now()
 
 check_timeout()
@@ -192,13 +213,14 @@ menu = [
     "⛳ Pairing Matrix",
     "🏌️ Handicap Scraper",
     "📘 GOAM Scores & Rounds",
-    "🏆 GOAM Season Dashboard",   # <-- ADD THIS
+    "🏆 GOAM Season Dashboard",
     "My Profile"
 ]
 
 if role == "admin":
     menu.append("User Management")
-    menu.append("📂 Data Manager")   # <-- NEW
+    menu.append("📂 Data Manager")
+
 menu.append("Logout")
 
 page = st.sidebar.radio("Navigation", menu)
@@ -229,23 +251,24 @@ elif page == "🏌️ Handicap Scraper":
             st.sidebar.error("Login failed.")
 
     st.session_state.course_df = load_course_data()
-    run_handicap_app(
-        True,
-        st.session_state.credentials,
-        st.session_state.course_df
-    )
+    run_handicap_app(True, st.session_state.credentials, st.session_state.course_df)
 
 elif page == "📘 GOAM Scores & Rounds":
     run_scores_app()
+
 elif page == "🏆 GOAM Season Dashboard":
     from apps.goam_dashboard import run
     run()
+
 elif page == "My Profile":
     show_profile_page(st.session_state.email)
 
 elif page == "User Management":
-    from admin.data_manager_page import show_data_manager_page
     show_admin_page(st.session_state.email)
+
+elif page == "📂 Data Manager":
+    from admin.data_manager_page import show_data_manager_page
+    show_data_manager_page()
 
 elif page == "Logout":
     st.session_state.authenticated = False

@@ -15,8 +15,8 @@ def convert_course_excel_to_json(df):
     courses = {}
 
     for _, row in df.iterrows():
-        course = row["Course Name"].strip()
-        tee = row["Tee Name"].strip()
+        course = safe_str(row.get("Course Name"))
+        tee = "" if pd.isna(row.get("Tee Name")) else str(row["Tee Name"]).strip()
 
         if course not in courses:
             courses[course] = {"tees": {}}
@@ -122,6 +122,13 @@ def show_data_manager_page():
                 st.success("Players merged (delta load).")
         else:
             st.error("Please upload a file.")
+    
+    def safe_str(value):
+        if value is None:
+            return ""
+        if isinstance(value, float):  # catches NaN
+            return ""
+        return str(value).strip()
 # -------------------------------------------------------------------
 # PAIRINGS SECTION (GOAM 4-Ball Format with Month + Course)
 # -------------------------------------------------------------------
