@@ -9,7 +9,7 @@ Allows:
 # TOP OF FILE
 import streamlit as st
 from datetime import datetime
-from auth.auth import load_users, save_users, hash_password, verify_password
+from auth.auth import load_users, save_users, hash_password, verify_password, change_password
 
 
 # ========================================================================
@@ -41,8 +41,8 @@ def show_profile_page(email: str):
         st.write(f"**Verified:** {'Yes' if user.get('verified') else 'No'}")
 
     with col2:
-        st.write(f"**Account Created:** {user.get('created', 'N/A')}")
-        st.write(f"**Last Updated:** {user.get('updated', 'N/A')}")
+        st.write(f"**Account Created:** {user.get('created_at', 'N/A')}")
+        st.write(f"**Last Updated:** {user.get('updated_at', 'N/A')}")
 
     st.markdown("---")
 
@@ -96,12 +96,10 @@ def show_profile_page(email: str):
             st.error("Password must be at least 8 characters")
             return
 
-        # Update password
-        user["password_hash"] = hash_password(new_pw)
-        user["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+success, msg = change_password(email, current_pw, new_pw)
 
-        users[email] = user
-        save_users(users)
-
-        st.success("Password updated successfully!")
-        st.rerun()
+       if success:
+           st.success(msg)
+           st.rerun()
+       else:
+           st.error(msg)
