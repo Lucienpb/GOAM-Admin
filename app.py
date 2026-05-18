@@ -45,6 +45,10 @@ def inject_theme():
             background-color: #f7f9fc;
         }
         section[data-testid="stSidebar"] {
+            background-color: #D6ECFF; /* Soft Light Blue */
+            color: #003366; /* Dark text for contrast */
+        }
+        section[data-testid="stSidebar"] {
             background-color: #0b3d91;
             color: white;
         }

@@ -5,7 +5,7 @@ from datetime import datetime
 class GOAMCalculator:
     """
     Performs all GOAM calculations:
-    - Build long-format rounds from course sheets
+    - Build long-format rounds from course sheets / JSON
     - IPS best six
     - Strokes best six (over par)
     - IPS leaderboard (Excel layout)
@@ -33,17 +33,17 @@ class GOAMCalculator:
         Get courses that have been played in months <= current month.
         Returns list of courses sorted by month order.
         """
+        if df.empty or "Course" not in df.columns:
+            return []
+
         current_month = datetime.now().month
-        
-        # Filter courses by month <= current month
+
         active_courses = [
             course for course, month in GOAMCalculator.COURSE_MONTHS.items()
             if month <= current_month and course in df["Course"].unique()
         ]
-        
-        # Sort by month order (using COURSE_MONTHS values)
+
         active_courses.sort(key=lambda x: GOAMCalculator.COURSE_MONTHS.get(x, 999))
-        
         return active_courses
 
     # ---------------------------------------------------------
@@ -80,16 +80,12 @@ class GOAMCalculator:
     # ---------------------------------------------------------
     @staticmethod
     def list_courses(df):
-        """Get list of courses sorted by month (only active courses)"""
-        if df.empty:
+        """Get list of courses sorted by month (only active courses)."""
+        if df.empty or "Course" not in df.columns:
             return []
-        
+
         all_courses = df["Course"].dropna().unique().tolist()
-        
-        # Filter to only active courses and sort by month
         active_courses = GOAMCalculator.get_active_courses(df)
-        
-        # Return only active courses that exist in data
         return [c for c in active_courses if c in all_courses]
 
     # ---------------------------------------------------------
@@ -100,7 +96,7 @@ class GOAMCalculator:
         """
         IPS leaderboard: best six IPS scores per player.
         """
-        if df.empty:
+        if df.empty or "IPS" not in df.columns:
             return pd.DataFrame(columns=["Name", "Best6_IPS", "Rounds_Played"])
 
         results = []
@@ -131,7 +127,7 @@ class GOAMCalculator:
         Strokes leaderboard: best six rounds by strokes over par.
         Lower is better.
         """
-        if df.empty:
+        if df.empty or "Strokes" not in df.columns:
             return pd.DataFrame(columns=["Name", "Games_Played", "Best6_Strokes_Over_Par"])
 
         df = df.copy()
@@ -165,7 +161,7 @@ class GOAMCalculator:
         """
         LIV scoring: top 3 IPS per team per course.
         """
-        if df.empty or "Team" not in df.columns:
+        if df.empty or "Team" not in df.columns or "IPS" not in df.columns:
             return pd.DataFrame(columns=["Team", "Course", "LIV_Points"])
 
         results = []
@@ -200,18 +196,12 @@ class GOAMCalculator:
         """
         Returns LIV leaderboard in Excel/UI format:
         Team | LIV Total | Strength Index | Trend Index | <courses...> (ordered by month)
-        
-        Trend Index: Compares current average (all courses) to previous average (all except latest)
-        - ↑ Current average > Previous average (Improving)
-        - ↓ Current average < Previous average (Declining)
-        - → Current average = Previous average (Stable)
         """
         liv_raw = GOAMCalculator.calculate_liv(df)
 
         if liv_raw.empty:
             return pd.DataFrame()
 
-        # Pivot: rows = Team, columns = Course, values = LIV_Points
         pivot = liv_raw.pivot_table(
             index="Team",
             columns="Course",
@@ -219,47 +209,36 @@ class GOAMCalculator:
             aggfunc="first",
         ).fillna(0)
 
-        # Get active courses sorted by month (before calculating totals)
         active_courses = GOAMCalculator.get_active_courses(df)
-        # Filter to only include courses that exist in this leaderboard
         active_courses = [c for c in active_courses if c in pivot.columns]
 
-        # LIV Total (only from active courses)
         pivot["LIV Total"] = pivot[active_courses].sum(axis=1)
 
-        # Strength Index = average points per active course played
         played_counts = pivot[active_courses].astype(bool).sum(axis=1)
         pivot["Strength Index"] = (
             pivot[active_courses].sum(axis=1) / played_counts.replace(0, pd.NA)
         ).round(1)
 
-        # Trend Index: Compare current average to previous average
         trend_indicators = []
         for team in pivot.index:
             if len(active_courses) < 2:
-                # Not enough courses to compare
                 trend_indicators.append("–")
             else:
-                # Current average = all active courses
                 current_avg = pivot.loc[team, active_courses].mean()
-                
-                # Previous average = all active courses except the latest
                 previous_courses = active_courses[:-1]
                 previous_avg = pivot.loc[team, previous_courses].mean()
-                
+
                 if current_avg > previous_avg:
                     trend_indicators.append("↑")
                 elif current_avg < previous_avg:
                     trend_indicators.append("↓")
                 else:
                     trend_indicators.append("→")
-        
+
         pivot["Trend Index"] = trend_indicators
 
-        # Sort by LIV Total
         pivot = pivot.sort_values(by="LIV Total", ascending=False)
 
-        # Final column order: Team | LIV Total | Strength Index | Trend Index | <courses by month>
         final_cols = ["LIV Total", "Strength Index", "Trend Index"] + active_courses
         final = pivot[final_cols].reset_index()  # Team becomes a column
 
@@ -272,14 +251,10 @@ class GOAMCalculator:
     def build_ips_leaderboard(df):
         """
         Returns IPS leaderboard in Excel format:
-        Rank | Name | Pos Change | Best6_IPS | <courses...> (ordered by month) | Rounds_Played
-        
-        Pos Change: Current rank vs previous round rank
-        - Shows +N if moved up (e.g., +6 = moved up 6 positions)
-        - Shows -N if moved down (e.g., -3 = moved down 3 positions)
-        - Shows "–" if no change or first appearance
+        Position | Name | Pos Change | IPS | Best6_IPS | <courses...> | Rounds_Played
+        (Pos Change is filled in the UI layer, not here.)
         """
-        if df.empty:
+        if df.empty or "IPS" not in df.columns or "Course" not in df.columns:
             return pd.DataFrame()
 
         pivot = df.pivot_table(
@@ -291,11 +266,18 @@ class GOAMCalculator:
 
         best6 = GOAMCalculator.calculate_best_six_ips(df)
 
-        merged = pivot.merge(best6, on="Name", how="left")
+        merged = pivot.merge(best6, on="Name", how="left").fillna(0)
 
-        merged = merged.fillna(0)
+        # Raw total IPS per player (all rounds)
+        merged["IPS"] = (
+            df.groupby("Name")["IPS"]
+            .sum()
+            .reindex(merged["Name"])
+            .fillna(0)
+            .astype(int)
+            .values
+        )
 
-        # Ensure numeric sorting works
         numeric_cols = merged.columns.drop(["Name"])
         merged[numeric_cols] = merged[numeric_cols].apply(
             pd.to_numeric, errors="coerce"
@@ -306,19 +288,12 @@ class GOAMCalculator:
             ascending=[False, False],
         ).reset_index(drop=True)
 
-        merged.insert(0, "Rank", merged.index + 1)
+        merged.insert(0, "Position", merged.index + 1)
 
-        # Calculate position change
-        # For now, we'll show "–" since we don't have previous position stored
-        # This can be enhanced with session state or persistent storage
-        merged.insert(1, "Pos Change", "–")
-
-        # Get active courses sorted by month
         active_courses = GOAMCalculator.get_active_courses(df)
-        # Filter to only include courses that exist in this leaderboard
         active_courses = [c for c in active_courses if c in merged.columns]
 
-        final_cols = ["Rank", "Pos Change", "Name", "Best6_IPS"] + active_courses + ["Rounds_Played"]
+        final_cols = ["Position", "Name", "IPS", "Best6_IPS"] + active_courses + ["Rounds_Played"]
 
         return merged[final_cols]
 
@@ -329,9 +304,9 @@ class GOAMCalculator:
     def build_strokes_leaderboard(df):
         """
         Returns Strokes leaderboard in Excel format:
-        Rank | Name | Best6_Strokes_Over_Par | <courses...> (ordered by month) | Games_Played
+        Rank | Name | Best6_Strokes_Over_Par | <courses...> | Games_Played
         """
-        if df.empty:
+        if df.empty or "Strokes" not in df.columns or "Course" not in df.columns:
             return pd.DataFrame()
 
         df = df.copy()
@@ -346,9 +321,7 @@ class GOAMCalculator:
 
         best6 = GOAMCalculator.calculate_strokes(df)
 
-        merged = pivot.merge(best6, on="Name", how="left")
-
-        merged = merged.fillna(0)
+        merged = pivot.merge(best6, on="Name", how="left").fillna(0)
 
         numeric_cols = merged.columns.drop(["Name"])
         merged[numeric_cols] = merged[numeric_cols].apply(
@@ -362,9 +335,7 @@ class GOAMCalculator:
 
         merged.insert(0, "Rank", merged.index + 1)
 
-        # Get active courses sorted by month
         active_courses = GOAMCalculator.get_active_courses(df)
-        # Filter to only include courses that exist in this leaderboard
         active_courses = [c for c in active_courses if c in merged.columns]
 
         final_cols = ["Rank", "Name", "Best6_Strokes_Over_Par"] + active_courses + ["Games_Played"]
@@ -384,7 +355,8 @@ class GOAMCalculator:
 
         result = {}
         for course, group in df.groupby("Course"):
-            result[course] = group[["Name", "Strokes", "IPS", "Team"]].reset_index(drop=True)
+            cols = [c for c in ["Name", "Strokes", "IPS", "Team"] if c in group.columns]
+            result[course] = group[cols].reset_index(drop=True)
         return result
 
     # ---------------------------------------------------------
@@ -397,3 +369,35 @@ class GOAMCalculator:
         """
         month = datetime.now().strftime("%b")
         return f"GOAM_Scores_2026_{month}_updated.xlsx"
+
+    # ---------------------------------------------------------
+    # Build from JSON
+    # ---------------------------------------------------------
+    @staticmethod
+    def build_from_json(goam_scores):
+        """
+        Build long-format DataFrame from JSON structure:
+        {
+          "Feb'26": {
+            "course": "Akasia",
+            "players": [
+              {"name": ..., "strokes": ..., "ips": ..., "team": ..., "nett": ...},
+              ...
+            ]
+          },
+          ...
+        }
+        """
+        rows = []
+        for month, data in goam_scores.items():
+            course = data.get("course", "")
+            for p in data.get("players", []):
+                rows.append({
+                    "Name": p.get("name"),
+                    "Strokes": p.get("strokes"),
+                    "IPS": p.get("ips"),
+                    "Course": course,
+                    "Month": month,
+                    "Team": p.get("team"),
+                })
+        return pd.DataFrame(rows)

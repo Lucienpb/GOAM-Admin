@@ -102,13 +102,19 @@ def delta_load_course_data(df: pd.DataFrame):
 
 
 # -------------------------------------------------------------------
-# PLAYERS SECTION
+# PLAYERS SECTION (with Nick1–Nick4 support)
 # -------------------------------------------------------------------
 def convert_players_excel_to_json(df):
     required_cols = ["Name", "membership_number", "Handicap Index Cap"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns in Players.xlsx: {missing}")
+
+    # Optional nickname columns
+    nickname_cols = ["Nick1", "Nick2", "Nick3", "Nick4"]
+    for col in nickname_cols:
+        if col not in df.columns:
+            df[col] = None  # ensure column exists
 
     players = []
 
@@ -125,12 +131,14 @@ def convert_players_excel_to_json(df):
             "name": name,
             "membership": membership,
             "handicap_index": handicap_index,
-            "team": team
+            "team": team,
+            "Nick1": safe_str(row.get("Nick1")),
+            "Nick2": safe_str(row.get("Nick2")),
+            "Nick3": safe_str(row.get("Nick3")),
+            "Nick4": safe_str(row.get("Nick4")),
         })
 
     return players
-
-
 
 
 def full_load_players(df: pd.DataFrame):
@@ -142,13 +150,14 @@ def delta_load_players(df: pd.DataFrame):
     existing = load_json("data/players.json") or []
     incoming = convert_players_excel_to_json(df)
 
+    # Merge by membership number
     existing_map = {p["membership"]: p for p in existing}
+
     for p in incoming:
         existing_map[p["membership"]] = p
 
     merged = list(existing_map.values())
     save_json("data/players.json", merged)
-
 
 # -------------------------------------------------------------------
 # PAIRINGS SECTION (GOAM 4-Ball Format with Month + Course)

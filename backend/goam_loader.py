@@ -26,3 +26,8 @@ class GOAMLoader:
             raise ValueError(f"Scorecard missing required columns: {required}")
 
         return df
+    @staticmethod
+    def load_json_scores(path):
+        import json
+        with open(path, "r") as f:
+            return json.load(f)

@@ -13,158 +13,145 @@ def _get_rounds_state():
     return st.session_state.goam_rounds
 
 
+def _format_pos_change(delta):
+    """
+    Convert numeric position change into arrow string:
+    - delta > 0  → moved up (better position)  → ⬆️ delta
+    - delta < 0  → moved down (worse position) → ⬇️ abs(delta)
+    - delta == 0 → no change                   → ➡️
+    - delta is None / no history               → –
+    """
+    if delta is None:
+        return "–"
+    try:
+        d = int(delta)
+    except (TypeError, ValueError):
+        return "–"
+
+    if d > 0:
+        return f"⬆️ {d}"
+    if d < 0:
+        return f"⬇️ {abs(d)}"
+    return "➡️"
+
+
 def run_scores_app():
     st.header("📘 GOAM Scores & Rounds")
 
     rounds = _get_rounds_state()
 
     # -----------------------------
-    # 1. Upload full-season workbook
+    # 1. Load GOAM scores from JSON
     # -----------------------------
-    st.subheader("📂 Load full-season workbook")
-
-    season_file = st.file_uploader(
-        "Upload GOAM_Scores_2026.xlsx",
-        type=["xlsx"],
-        key="season_upload"
-    )
-
-    if season_file:
-        sheets = GOAMLoader.load_season(season_file)
-        season_rounds = GOAMCalculator.build_from_course_sheets(sheets)
+    try:
+        goam_scores = GOAMLoader.load_json_scores("data/goam_scores.json")
+        season_rounds = GOAMCalculator.build_from_json(goam_scores)
 
         if not season_rounds.empty:
             rounds.rounds = [season_rounds]
-            st.success("Season workbook loaded successfully.")
+            st.success("GOAM scores loaded from JSON.")
+        else:
+            st.info("No GOAM scores found. Load data via Data Manager.")
+            return
+
+    except Exception as e:
+        st.error(f"Error loading GOAM scores: {e}")
+        return
 
     # -----------------------------
-    # 2. Upload single-round scorecard
-    # -----------------------------
-    st.subheader("📥 Upload scorecard (single round)")
-
-    course_for_upload = st.selectbox(
-        "Course:",
-        ["Akasia", "PGC", "Kyalami", "CopperLeaf", "Services"],
-        key="scorecard_course"
-    )
-
-    scorecard_file = st.file_uploader(
-        "Upload scorecard",
-        type=["xlsx"],
-        key="scorecard_upload"
-    )
-
-    if scorecard_file:
-        try:
-            df_round = GOAMLoader.load_single_round(scorecard_file)
-            rounds.add_round(df_round, course_name=course_for_upload)
-            st.success(f"Scorecard added for {course_for_upload}.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-    # -----------------------------
-    # 3. Manual entry
-    # -----------------------------
-    st.subheader("✍️ Manual score entry")
-
-    with st.form("manual_entry"):
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            name = st.text_input("Player Name")
-        with col2:
-            course_manual = st.selectbox(
-                "Course",
-                ["Akasia", "PGC", "Kyalami", "CopperLeaf", "Services"]
-            )
-        with col3:
-            strokes = st.number_input("Strokes", min_value=40, max_value=140)
-        with col4:
-            ips = st.number_input("IPS", min_value=0, max_value=60)
-
-        submitted = st.form_submit_button("Add Round")
-
-    if submitted and name:
-        df_manual = pd.DataFrame([{
-            "Name": name,
-            "Strokes": strokes,
-            "IPS": ips
-        }])
-        rounds.add_round(df_manual, course_name=course_manual)
-        st.success(f"Round added for {name} at {course_manual}.")
-
-    # -----------------------------
-    # 4. Build combined rounds table
+    # 2. Build combined rounds table
     # -----------------------------
     all_rounds_df = rounds.get_all_rounds()
 
     if all_rounds_df.empty:
-        st.info("No rounds loaded yet.")
+        st.info("No rounds available.")
         return
 
     # -----------------------------
-    # 5. Course selection for leaderboards
+    # 3. Course selection
     # -----------------------------
     st.subheader("🎯 Select courses to include in leaderboards")
 
     all_courses = GOAMCalculator.list_courses(all_rounds_df)
-    
-    # Get active courses (month <= current month) for default selection
     active_courses = GOAMCalculator.get_active_courses(all_rounds_df)
 
     selected_courses = st.multiselect(
         "Only include these courses:",
         all_courses,
-        default=active_courses  # Default to active courses only
+        default=active_courses
     )
 
     filtered_df = all_rounds_df[all_rounds_df["Course"].isin(selected_courses)]
 
     # -----------------------------
-    # 6. Calculate IPS, Strokes, LIV
+    # 4. Leaderboard calculations
     # -----------------------------
     ips_table = GOAMCalculator.build_ips_leaderboard(filtered_df)
     strokes_table = GOAMCalculator.build_strokes_leaderboard(filtered_df)
     liv_table = GOAMCalculator.build_liv_leaderboard(filtered_df)
     course_sheets = GOAMCalculator.split_by_course(filtered_df)
 
-    # Update position history for position change tracking
-    rounds.update_position_history(ips_table)
-    
-    # Apply position changes to IPS leaderboard
-    if not ips_table.empty:
-        ips_table = ips_table.copy()
-        ips_table["Pos Change"] = ips_table["Name"].apply(lambda x: rounds.get_position_change(x))
+    if ips_table.empty:
+        st.info("No IPS data available for selected courses.")
+        return
+
+    # Normalize column names just in case
+    ips_table.rename(columns={c: c.strip() for c in ips_table.columns}, inplace=True)
+
+    # Ensure Position exists (defensive)
+    if "Position" not in ips_table.columns:
+        if "IPS" in ips_table.columns:
+            ips_table["Position"] = (
+                ips_table["IPS"]
+                .rank(ascending=False, method="min")
+                .astype(int)
+            )
+        else:
+            st.error("IPS column missing from IPS leaderboard.")
+            return
 
     # -----------------------------
-    # 7. Leaderboard Selector
+    # 5. Update position history & Pos Change arrows
+    # -----------------------------
+    # GOAMRounds is assumed to track numeric positions internally.
+    rounds.update_position_history(ips_table)
+
+    ips_table = ips_table.copy()
+    if "Name" in ips_table.columns:
+        ips_table.insert(2, "Pos Change", ips_table["Name"].apply(
+            lambda name: _format_pos_change(rounds.get_position_change(name))
+        ))
+    else:
+        ips_table.insert(2, "Pos Change", "–")
+
+    # -----------------------------
+    # 6. Leaderboard Selector
     # -----------------------------
     st.subheader("🏆 Leaderboards")
 
     leaderboard_choice = st.selectbox(
         "Select leaderboard:",
         ["IPS", "Strokes", "LIV"],
-        index=0  # Default to IPS
+        index=0
     )
 
     # -----------------------------
-    # 8. Display selected leaderboard
+    # 7. Display selected leaderboard
     # -----------------------------
     if leaderboard_choice == "IPS":
         st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
-        st.dataframe(ips_table, use_container_width=True)
+        st.dataframe(ips_table, width="stretch")
 
     elif leaderboard_choice == "Strokes":
         st.subheader("⛳ Strokes Leaderboard (Best 6 Over Par)")
-        st.dataframe(strokes_table, use_container_width=True)
+        st.dataframe(strokes_table, width="stretch")
 
     elif leaderboard_choice == "LIV":
         st.subheader("🏁 LIV Team Leaderboard (Top 3 IPS per Course)")
-        st.dataframe(liv_table, use_container_width=True)
-
-
+        st.dataframe(liv_table, width="stretch")
 
     # -----------------------------
-    # 8.1 View Score Cards
+    # 8. View Score Cards
     # -----------------------------
     st.subheader("📂 View Score Cards")
 
@@ -172,7 +159,7 @@ def run_scores_app():
     choice = st.selectbox("Select Course", options)
 
     if choice in course_sheets:
-        st.dataframe(course_sheets[choice], use_container_width=True)
+        st.dataframe(course_sheets[choice], width="stretch")
 
     # -----------------------------
     # 9. Export updated workbook
