@@ -1,3 +1,9 @@
+#---------------------------------
+# GOAM Loader
+#   - Loads GOAM Excel workbooks and single-round scorecards.
+#   - Loads GOAM scores from JSON for Scores App
+#---------------------------------
+
 import pandas as pd
 
 class GOAMLoader:

@@ -1,3 +1,9 @@
+#---------------------------------
+# GOAM Rounds Data Structure
+#   - Stores all rounds (loaded from JSON) in memory
+#   - Tracks position history for position change calculations
+#---------------------------------
+
 import pandas as pd
 
 class GOAMRounds:

@@ -1,3 +1,15 @@
+#---------------------------------
+# GOAM Calculator
+#   - Build long-format rounds from course sheets / JSON
+#   - IPS best six
+#   - Strokes best six (over par)
+#   - IPS leaderboard (Excel layout)
+#   - Strokes leaderboard (Excel layout)
+#   - LIV team scores + LIV leaderboard 
+#   - Split by course
+#   - Dynamic course list
+#   - Output filename
+#---------------------------------
 import pandas as pd
 from datetime import datetime
 

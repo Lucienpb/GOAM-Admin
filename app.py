@@ -1,4 +1,9 @@
 #-------------------------------
+#    """
+#    The code is a Streamlit web application for a golf organization's admin tasks, including
+#    authentication, user roles, dashboard display, pairing matrix, handicap scraper, scores management,
+#    user management, data manager, and profile pages.
+#    """
 # GOAM ADMIN APP
 #-------------------------------
 import sys
@@ -88,7 +93,7 @@ inject_theme()
 # ========================================================================
 # SIDEBAR LOGO
 # ========================================================================
-st.sidebar.image("assets/goam_logo.png", use_column_width=True)
+st.sidebar.image("assets/goam_logo.png", width='stretch')
 st.sidebar.markdown("---")
 
 # ========================================================================
@@ -207,74 +212,84 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ========================================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (NESTED MENU)
+# ========================================================================
+# ========================================================================
+# SIDEBAR NAVIGATION (COMPATIBLE WITH ALL STREAMLIT VERSIONS)
 # ========================================================================
 st.sidebar.title(f"👤 {st.session_state.email}")
 role = get_user_role(st.session_state.email)
 
-menu = [
+main_menu = st.sidebar.radio("Main Menu", [
     "Dashboard",
-    "⛳ Pairing Matrix",
-    "🏌️ Handicap Scraper",
-    "📘 GOAM Scores & Rounds",
-    "🏆 GOAM Season Dashboard",
-    "My Profile"
-]
+    "Pairing",
+    "Handicap Scraper",
+    "GOAM Scores & Rounds",
+    "GOAM Season Dashboard",
+    "My Profile",
+    "Admin" if role == "admin" else None,
+    "Logout"
+])
 
-if role == "admin":
-    menu.append("User Management")
-    menu.append("📂 Data Manager")
+# Remove None entries
+if main_menu is None:
+    main_menu = "Dashboard"
 
-menu.append("Logout")
+# SUBMENU FOR PAIRING
+pairing_sub = None
+if main_menu == "Pairing":
+    pairing_sub = st.sidebar.radio("Pairing Options", [
+        "Matrix",
+        "Gen. 4 Ball"
+    ])
 
-page = st.sidebar.radio("Navigation", menu)
+# SUBMENU FOR ADMIN
+admin_sub = None
+if main_menu == "Admin":
+    admin_sub = st.sidebar.radio("Admin Options", [
+        "User Management",
+        "Data Manager"
+    ])
+
 
 # ========================================================================
 # PAGE ROUTING
 # ========================================================================
-if page == "Dashboard":
+if main_menu == "Dashboard":
     st.header("📊 GOAM Dashboard")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Role", role.capitalize())
-    col2.metric("Account", "Verified")
-    col3.metric("Login Time", st.session_state.login_time.strftime("%H:%M:%S"))
 
-elif page == "⛳ Pairing Matrix":
+elif main_menu == "Pairing":
     run_pairing_app()
 
-elif page == "🏌️ Handicap Scraper":
+elif main_menu == "Handicap Scraper":
     username = st.sidebar.text_input("Membership Number", type="password")
     password = st.sidebar.text_input("Password", type="password")
-
     if st.sidebar.button("Login to Handicap System"):
         ok = test_login(username, password)
         if ok:
-            st.session_state.credentials = {"username": username, "password": password}
             st.sidebar.success("Logged in!")
         else:
             st.sidebar.error("Login failed.")
-
     st.session_state.course_df = load_course_data()
     run_handicap_app(True, st.session_state.credentials, st.session_state.course_df)
 
-elif page == "📘 GOAM Scores & Rounds":
+elif main_menu == "GOAM Scores & Rounds":
     run_scores_app()
 
-elif page == "🏆 GOAM Season Dashboard":
+elif main_menu == "GOAM Season Dashboard":
     from apps.goam_dashboard import run
     run()
 
-elif page == "My Profile":
+elif main_menu == "My Profile":
     show_profile_page(st.session_state.email)
 
-elif page == "User Management":
-    show_admin_page(st.session_state.email)
+elif main_menu == "Admin":
+    if admin_sub == "User Management":
+        show_admin_page(st.session_state.email)
+    elif admin_sub == "Data Manager":
+        show_data_manager_page()
 
-elif page == "📂 Data Manager":
-    from admin.data_manager_page import show_data_manager_page
-    show_data_manager_page()
-
-elif page == "Logout":
+elif main_menu == "Logout":
     st.session_state.authenticated = False
     st.session_state.email = None
     st.session_state.role = None

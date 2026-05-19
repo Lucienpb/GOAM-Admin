@@ -1,3 +1,9 @@
+#---------------------------------
+# GOAM Name Normalization Utils 
+#   - Build alias map from players.json
+#   - Normalize input names to official names
+#---------------------------------
+
 import re
 
 def build_alias_map(players_df):

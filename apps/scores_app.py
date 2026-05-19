@@ -1,3 +1,11 @@
+#---------------------------------
+# GOAM Scores & Rounds App
+#   - Load GOAM scores from JSON
+#   - Build IPS, Strokes, LIV leaderboards 
+#   - Show position changes with arrows
+#   - Export updated workbook with new leaderboards
+#---------------------------------  
+
 import os
 import streamlit as st
 import pandas as pd

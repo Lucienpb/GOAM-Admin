@@ -1,97 +1,134 @@
-"""
-Fourball Generator Module - Generates optimal fourballs
-"""
 import random
 from itertools import combinations
+import pandas as pd
 
-# ================================================================================
-# FOURBALL GENERATION
-# ================================================================================
-def attempt_grouping(players, teams, penalty, seed):
-    """Attempt to create fourballs with given seed"""
-    random.seed(seed)
-    shuffled = players[:]
-    random.shuffle(shuffled)
 
-    sorted_players = sorted(shuffled, key=lambda p: sum(penalty[p].values()), reverse=True)
+def generate_fourballs(players_list, teams, matrix, strict_mode, shuffle_seed, player_modes):
+    """
+    players_list: list of normalized player ids
+    teams: dict[player] -> team initials
+    matrix: pairing history (numeric)
+    player_modes: dict[player] -> "Walking 🚶‍♂️" or "Carting 🛺"
+    """
+    random.seed(shuffle_seed)
+
+    players = players_list[:]
+
+    # ---------------------------------------------------------
+    # PENALTY MATRIX
+    # ---------------------------------------------------------
+    penalty = pd.DataFrame(0, index=players, columns=players, dtype=int)
+
+    def history_penalty(a, b):
+        return int(matrix.loc[a, b]) * 2
+
+    def team_penalty(a, b):
+        ta = teams.get(a)
+        tb = teams.get(b)
+        if ta and tb and ta == tb:
+            return 3
+        return 0
+
+    def cart_penalty(a, b):
+        mode_a = player_modes.get(a, "Walking 🚶‍♂️")
+        mode_b = player_modes.get(b, "Walking 🚶‍♂️")
+
+        if "Carting" in mode_a and "Carting" in mode_b:
+            return -3   # strong preference for carts together
+        elif "Walking" in mode_a and "Walking" in mode_b:
+            return 0    # neutral
+        else:
+            return 1    # small penalty for mixing
+
+    for a, b in combinations(players, 2):
+        p = 0
+        p += history_penalty(a, b)
+        p += team_penalty(a, b)
+        p += cart_penalty(a, b)
+        penalty.loc[a, b] = p
+        penalty.loc[b, a] = p
+
+    # ---------------------------------------------------------
+    # AUTO-BALANCING: TRY 2 CARTS + 2 WALKERS
+    # ---------------------------------------------------------
+    carts = [p for p in players if "Carting" in player_modes.get(p, "Walking 🚶‍♂️")]
+    walkers = [p for p in players if "Walking" in player_modes.get(p, "Walking 🚶‍♂️")]
+
+    random.shuffle(carts)
+    random.shuffle(walkers)
 
     groups = []
-    used = set()
 
-    for p in sorted_players:
-        if p in used:
-            continue
+    # ideal groups: 2 carts + 2 walkers
+    while len(carts) >= 2 and len(walkers) >= 2:
+        g = [carts.pop(), carts.pop(), walkers.pop(), walkers.pop()]
+        groups.append(g)
 
-        group = [p]
-        used.add(p)
+    remaining = carts + walkers
+    random.shuffle(remaining)
 
-        for q in sorted_players:
-            if q in used:
-                continue
-            if teams[q] in [teams[x] for x in group]:
-                continue
-            if any(penalty[q][x] > 0 for x in group):
-                continue
-
-            group.append(q)
-            used.add(q)
-            if len(group) == 4:
-                break
-
-        groups.append(group)
-
-    return groups
-
-def generate_fourballs(players, teams, matrix, strict_mode=True, shuffle_seed=0):
-    """Generate optimal fourballs from player list and matrix"""
-    # Build pairing penalty from matrix
-    penalty = {}
-    for a in players:
-        penalty[a] = {}
-        for b in players:
-            if a == b:
-                penalty[a][b] = 999
-            else:
-                if (a in matrix.index) and (b in matrix.columns):
-                    val = matrix.loc[a, b]
-                else:
-                    val = ""
-                penalty[a][b] = int(val) if val not in ["", "-", None] else 0
-
-    # Try up to 50 attempts if strict mode is ON
-    attempts = 50 if strict_mode else 1
-    final_groups = None
-
-    for i in range(attempts):
-        groups = attempt_grouping(players, teams, penalty, shuffle_seed + i)
-
-        # Check if any group is < 3
-        if strict_mode:
-            if all(len(g) >= 3 for g in groups):
-                final_groups = groups
-                break
+    current = []
+    for p in remaining:
+        current.append(p)
+        if len(current) == 4:
+            groups.append(current)
+            current = []
+    if current:
+        if strict_mode and len(current) < 3 and groups:
+            for p in current:
+                best_g = None
+                best_cost = float("inf")
+                for g in groups:
+                    if len(g) >= 4:
+                        continue
+                    cost = 0
+                    for x in g:
+                        cost += penalty.loc[p, x]
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_g = g
+                if best_g is not None:
+                    best_g.append(p)
         else:
-            final_groups = groups
-            break
+            groups.append(current)
 
-    # If strict mode failed, force merge
-    if final_groups is None:
-        groups = attempt_grouping(players, teams, penalty, shuffle_seed)
-        flat = [p for g in groups for p in g]
-        final_groups = [flat[i:i+4] for i in range(0, len(flat), 4)]
-        if len(final_groups[-1]) == 1:
-            final_groups[-2].append(final_groups[-1][0])
-            final_groups = final_groups[:-1]
-        if len(final_groups[-1]) == 2:
-            final_groups[-2].extend(final_groups[-1])
-            final_groups = final_groups[:-1]
+    # ---------------------------------------------------------
+    # LOCAL IMPROVEMENT
+    # ---------------------------------------------------------
+    def group_cost(g):
+        c = 0
+        for a, b in combinations(g, 2):
+            c += penalty.loc[a, b]
+        return c
+
+    improved = True
+    iters = 0
+    max_iters = 200
+
+    while improved and iters < max_iters:
+        improved = False
+        iters += 1
+
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                g1 = groups[i]
+                g2 = groups[j]
+                for a in g1:
+                    for b in g2:
+                        new_g1 = [x for x in g1 if x != a] + [b]
+                        new_g2 = [x for x in g2 if x != b] + [a]
+
+                        if strict_mode and (len(new_g1) < 3 or len(new_g2) < 3):
+                            continue
+
+                        old_cost = group_cost(g1) + group_cost(g2)
+                        new_cost = group_cost(new_g1) + group_cost(new_g2)
+
+                        if new_cost < old_cost:
+                            groups[i] = new_g1
+                            groups[j] = new_g2
+                            improved = True
+
+    final_groups = [list(g) for g in groups]
 
     return final_groups, penalty
-
-def get_initials(team_name):
-    """Extract initials from team name (e.g., 'Fairway Fighters' -> 'FF')"""
-    return ''.join([word[0].upper() for word in team_name.split()])
-
-def format_player(name, teams):
-    """Format player name with team initials"""
-    return f"{name} ({get_initials(teams[name])})"
