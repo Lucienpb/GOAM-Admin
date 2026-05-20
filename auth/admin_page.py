@@ -39,14 +39,16 @@ def show_admin_page(admin_email: str):
         new_role = st.selectbox("Role", ["member", "admin"])
 
         if st.button("Create User", use_container_width=True):
+            email_norm = new_email.strip().lower()
+
             if not new_email or not new_password:
                 st.error("Email and password are required")
-            elif new_email in users:
+            elif email_norm in users:
                 st.error("User already exists")
             elif len(new_password) < 8:
                 st.error("Password must be at least 8 characters")
             else:
-                ok, msg = create_user(new_email, new_password, new_role)
+                ok, msg = create_user(email_norm, new_password, new_role)
                 if ok:
                     st.success("User created successfully!")
                     st.rerun()

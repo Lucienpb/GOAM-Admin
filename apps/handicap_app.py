@@ -1,143 +1,236 @@
-"""
-Handicap Scraper App
-"""
+#-------------------------------------------------"""
+# Handicap Scraper App (Mode-based version)
+#   - Single Player Lookup
+#   - Batch Processing  (Excel upload + download)       
+#   - Handicap Calculator (manual input)
+#-------------------------------------------------  
+
 import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
-from utils.handicap_scraper import test_login, scrape_handicap_pw
-from utils.handicap_calculator import load_course_data, render_course_tee_selector, calculate_course_handicap
 
-def run(logged_in, credentials, course_df):
-    st.header("Handicap Scraper & Calculator")
+from utils.handicap_scraper import scrape_handicap_pw
+from utils.handicap_calculator import (
+    render_course_tee_selector,
+    calculate_course_handicap,
+)
 
-    if logged_in:
-        st.success("✅ Login successful! Connected to Handicaps.co.za.")
+# ---------------- SAFE ROUND FIX ----------------
+def safe_round(value):
+    if value is None:
+        return None
+    try:
+        return int(round(value))
+    except Exception:
+        return None
+# -------------------------------------------------
 
-        tab1, tab2, tab3 = st.tabs(["Single Player", "Batch Processing", "Handicap Calculator"])
 
-        # --------- Single Player ---------
-        with tab1:
-            st.header("Single Player Lookup")
+# ============================================================
+# MAIN ENTRY POINT (called from app.py)
+# ============================================================
+def run(mode, credentials, course_df):
 
-            course, tee, tee_data = render_course_tee_selector(course_df, "single")
+    if mode == "single":
+        show_single_player(credentials, course_df)
 
-            member = st.text_input("Membership Number", key="single_member")
+    elif mode == "batch":
+        show_batch_processing(credentials, course_df)
 
-            if st.button("Search Player"):
-                with st.spinner("Scraping..."):
-                    result = scrape_handicap_pw(credentials["username"], credentials["password"], member)
+    elif mode == "calculator":
+        show_handicap_calculator(course_df)
 
-                if result["status"] == "cached":
-                    st.info("⚡ Loaded from cache")
 
-                if result["status"] == "error":
-                    st.error(result["error"])
-                else:
-                    st.success("Player found!")
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Membership", result["membership"])
-                    col2.metric("Name", result["name"])
-                    col3.metric("Handicap Index", result["handicap_index"])
+# ============================================================
+# SINGLE PLAYER SCRAPER
+# ============================================================
+def show_single_player(credentials, course_df):
+    st.header("🏌️ Single Player Lookup")
 
-                    if tee_data is not None:
-                        course_hcp = calculate_course_handicap(
-                            result["handicap_index"],
-                            tee_data["Slope Rating"],
-                            tee_data["Course Rating"],
-                            tee_data["Par"],
-                        )
-                        st.metric("Course Handicap", int(round(course_hcp)))
+    username = credentials.get("username")
+    password = credentials.get("password")
 
-        # --------- Batch Processing ---------
-        with tab2:
-            st.header("Batch Processing")
+    if not username or not password:
+        st.warning("Please enter your Handicaps.co.za login details in the sidebar.")
+        return
 
-            course, tee, tee_data = render_course_tee_selector(course_df, "batch")
+    course, tee, tee_data = render_course_tee_selector(course_df, "single")
 
-            uploaded = st.file_uploader("Upload player_ids.xlsx", type=["xlsx"])
+    member = st.text_input("Membership Number", key="single_member")
 
-            if uploaded and st.button("Process All"):
-                df_input = pd.read_excel(uploaded)
+    if st.button("Search Player"):
+        if not member.strip():
+            st.error("Please enter a membership number.")
+            return
 
-                membership_col = next((c for c in df_input.columns if "member" in c.lower()), None)
-                cap_col = next((c for c in df_input.columns if "cap" in c.lower()), None)
-                name_col = next((c for c in df_input.columns if "name" in c.lower()), None)
+        with st.spinner("Scraping..."):
+            name, index = scrape_handicap_pw(
+                username,
+                password,
+                member,
+            )
 
-                members = df_input[membership_col].astype(str).str.replace(r"\.0$", "", regex=True)
-                caps = df_input[cap_col]
-                names = df_input[name_col] if name_col else [None] * len(members)
+        st.write("DEBUG single:", {"member": member, "name": name, "index": index})
 
-                results = []
-                progress = st.progress(0)
-                status_text = st.empty()
+        if not name:
+            st.error("Player not found.")
+        else:
+            st.success("Player found!")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Membership", member)
+            col2.metric("Name", name)
+            col3.metric("Handicap Index", index if index else "Pending")
 
-                for i, (mem, cap, fallback) in enumerate(zip(members, caps, names)):
-                    status_text.write(f"Searching member: {mem}")
-
-                    result = scrape_handicap_pw(credentials["username"], credentials["password"], mem, fallback)
-
-                    scraped = result.get("handicap_index")
-                    if scraped:
-                        try:
-                            scraped_f = float(scraped)
-                            final_index = cap if scraped_f > cap else scraped_f
-                        except:
-                            final_index = cap
-                    else:
-                        final_index = cap
-
-                    result["cap"] = cap
-
-                    if tee_data is not None:
-                        course_hcp = calculate_course_handicap(
-                            final_index,
-                            tee_data["Slope Rating"],
-                            tee_data["Course Rating"],
-                            tee_data["Par"],
-                        )
-                        result["course_handicap"] = int(round(course_hcp)) if course_hcp is not None else None
-                    else:
-                        result["course_handicap"] = None
-
-                    results.append(result)
-                    progress.progress((i + 1) / len(members))
-
-                status_text.write("Done")
-
-                df_out = pd.DataFrame(results)
-                df_out = df_out.drop(columns=["status"])
-                df_out = df_out.rename(columns={"cap": "status"})
-
-                output = io.BytesIO()
-                df_out.to_excel(output, index=False)
-                output.seek(0)
-
-                st.download_button(
-                    "Download Results",
-                    data=output.getvalue(),
-                    file_name=f"GOAM_HI_{datetime.now().strftime('%Y%m')}_PW.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-
-                st.dataframe(df_out)
-
-        # --------- Handicap Calculator ---------
-        with tab3:
-            st.header("Handicap Calculator")
-
-            index = st.number_input("Handicap Index", min_value=0.0, max_value=54.0, step=0.1)
-
-            course, tee, tee_data = render_course_tee_selector(course_df, "calc")
-
-            if tee_data is not None:
-                hcp = calculate_course_handicap(
+            if tee_data is not None and index:
+                course_hcp = calculate_course_handicap(
                     index,
                     tee_data["Slope Rating"],
                     tee_data["Course Rating"],
                     tee_data["Par"],
                 )
-                st.metric("Course Handicap", int(round(hcp)))
+                hcp_display = safe_round(course_hcp)
+                st.metric(
+                    "Course Handicap",
+                    hcp_display if hcp_display is not None else "N/A",
+                )
 
-    else:
-        st.warning("👈 Please log in using the sidebar to access the Handicap Scraper.")
+
+# ============================================================
+# BATCH PROCESSING
+# ============================================================
+def show_batch_processing(credentials, course_df):
+    st.header("📦 Batch Processing")
+
+    username = credentials.get("username")
+    password = credentials.get("password")
+
+    if not username or not password:
+        st.warning("Please enter your Handicaps.co.za login details in the sidebar.")
+        return
+
+    course, tee, tee_data = render_course_tee_selector(course_df, "batch")
+
+    uploaded = st.file_uploader("Upload player_ids.xlsx", type=["xlsx"])
+
+    if uploaded and st.button("Process All"):
+        df_input = pd.read_excel(uploaded)
+
+        membership_col = next(
+            (c for c in df_input.columns if "member" in c.lower()), None
+        )
+        cap_col = next(
+            (c for c in df_input.columns if "cap" in c.lower()), None
+        )
+        name_col = next(
+            (c for c in df_input.columns if "name" in c.lower()), None
+        )
+
+        if not membership_col or not cap_col:
+            st.error(
+                "Excel must contain at least 'membership' and 'cap' columns "
+                "(case-insensitive match)."
+            )
+            return
+
+        members = (
+            df_input[membership_col]
+            .astype(str)
+            .str.replace(r"\.0$", "", regex=True)
+        )
+        caps = df_input[cap_col]
+        names = df_input[name_col] if name_col else [None] * len(members)
+
+        results = []
+        progress = st.progress(0)
+        status_text = st.empty()
+
+        for i, (mem, cap, fallback) in enumerate(zip(members, caps, names)):
+            mem = str(mem).strip()
+            status_text.write(f"Searching member: {mem}")
+
+            name, scraped_index = scrape_handicap_pw(
+                username,
+                password,
+                mem,
+                fallback_name=fallback,
+            )
+
+            # Decide final index (cap vs scraped)
+            final_index = None
+            if scraped_index:
+                try:
+                    scraped_f = float(scraped_index)
+                    final_index = cap if scraped_f > cap else scraped_f
+                except Exception:
+                    final_index = cap
+            else:
+                final_index = cap
+
+            # Course handicap if tee_data is available
+            course_hcp_val = None
+            if tee_data is not None and final_index is not None:
+                course_hcp_val = safe_round(
+                    calculate_course_handicap(
+                        final_index,
+                        tee_data["Slope Rating"],
+                        tee_data["Course Rating"],
+                        tee_data["Par"],
+                    )
+                )
+
+            results.append(
+                {
+                    "membership": mem,
+                    "name": name,
+                    "handicap_index_scraped": scraped_index,
+                    "cap": cap,
+                    "final_index": final_index,
+                    "course_handicap": course_hcp_val,
+                }
+            )
+
+            progress.progress((i + 1) / len(members))
+
+        status_text.write("Done")
+
+        df_out = pd.DataFrame(results)
+
+        output = io.BytesIO()
+        df_out.to_excel(output, index=False)
+        output.seek(0)
+
+        st.download_button(
+            "Download Results",
+            data=output.getvalue(),
+            file_name=f"GOAM_HI_{datetime.now().strftime('%Y%m')}_PW.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        st.dataframe(df_out)
+
+
+# ============================================================
+# HANDICAP CALCULATOR
+# ============================================================
+def show_handicap_calculator(course_df):
+    st.header("🧮 Handicap Calculator")
+
+    index = st.number_input(
+        "Handicap Index", min_value=0.0, max_value=54.0, step=0.1
+    )
+
+    course, tee, tee_data = render_course_tee_selector(course_df, "calc")
+
+    if tee_data is not None:
+        hcp = calculate_course_handicap(
+            index,
+            tee_data["Slope Rating"],
+            tee_data["Course Rating"],
+            tee_data["Par"],
+        )
+        hcp_display = safe_round(hcp)
+        st.metric(
+            "Course Handicap",
+            hcp_display if hcp_display is not None else "N/A",
+        )

@@ -30,14 +30,12 @@ LOCKOUT_DURATION = 300  # 5 minutes
 # ========================================================================
 
 def _ensure_throttle_file():
-    """Ensure throttle file exists"""
     if not os.path.exists(THROTTLE_FILE):
         with open(THROTTLE_FILE, "w") as f:
             json.dump({}, f)
 
 
 def get_login_attempts(email):
-    """Return failed attempts + last failure timestamp"""
     _ensure_throttle_file()
     with open(THROTTLE_FILE, "r") as f:
         data = json.load(f)
@@ -45,7 +43,6 @@ def get_login_attempts(email):
 
 
 def record_failed_attempt(email):
-    """Increment failed attempts"""
     _ensure_throttle_file()
     with open(THROTTLE_FILE, "r") as f:
         data = json.load(f)
@@ -60,7 +57,6 @@ def record_failed_attempt(email):
 
 
 def record_successful_login(email):
-    """Reset failed attempts"""
     _ensure_throttle_file()
     with open(THROTTLE_FILE, "r") as f:
         data = json.load(f)
@@ -73,7 +69,6 @@ def record_successful_login(email):
 
 
 def is_account_locked(email):
-    """Return True if account is locked"""
     entry = get_login_attempts(email)
     if entry["failed"] < MAX_FAILED_ATTEMPTS:
         return False
@@ -83,7 +78,6 @@ def is_account_locked(email):
 
 
 def get_lockout_remaining_seconds(email):
-    """Return seconds remaining in lockout"""
     entry = get_login_attempts(email)
     elapsed = int(time.time()) - entry["last_fail"]
     remaining = LOCKOUT_DURATION - elapsed
@@ -105,27 +99,30 @@ def show_login_page():
 
     if not login_btn:
         return
+
     st.info(f"DEBUG: Using users.json at: {Path(USERS_FILE).resolve()}")
     users = load_users()
+
+    # Normalize email for lookup
+    email_norm = email.strip().lower()
 
     # --- VALIDATION ---
     if not email or not password:
         st.error("Please enter both email and password")
         return
 
-    if email not in users:
+    if email_norm not in users:
         st.error("No account found with that email")
-        # Show the absolute path of the users.json file being used
         st.info(f"Using users.json at: {Path(USERS_FILE).resolve()}")
         return
 
     # --- LOCKOUT CHECK ---
-    if is_account_locked(email):
-        remaining = get_lockout_remaining_seconds(email)
+    if is_account_locked(email_norm):
+        remaining = get_lockout_remaining_seconds(email_norm)
         st.error(f"Too many failed attempts. Try again in {remaining} seconds.")
         return
 
-    user = users[email]
+    user = users[email_norm]
 
     # --- EMAIL VERIFIED? ---
     if not user.get("verified", False):
@@ -135,8 +132,8 @@ def show_login_page():
 
     # --- PASSWORD CHECK ---
     if not verify_password(password, user["password_hash"]):
-        record_failed_attempt(email)
-        attempts = get_login_attempts(email)["failed"]
+        record_failed_attempt(email_norm)
+        attempts = get_login_attempts(email_norm)["failed"]
 
         if attempts >= MAX_FAILED_ATTEMPTS:
             st.error("Account locked due to too many failed attempts.")
@@ -146,12 +143,11 @@ def show_login_page():
         return
 
     # --- SUCCESS ---
-    record_successful_login(email)
+    record_successful_login(email_norm)
     st.success("Login successful!")
 
-    # Set session state
     st.session_state.authenticated = True
-    st.session_state.email = email
+    st.session_state.email = email_norm
     st.session_state.role = user.get("role", "member")
     st.session_state.login_time = datetime.now()
 

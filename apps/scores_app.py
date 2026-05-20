@@ -1,10 +1,8 @@
 #---------------------------------
-# GOAM Scores & Rounds App
-#   - Load GOAM scores from JSON
-#   - Build IPS, Strokes, LIV leaderboards 
-#   - Show position changes with arrows
-#   - Export updated workbook with new leaderboards
-#---------------------------------  
+# GOAM Scores & Rounds App (SPLIT VERSION)
+#   - Leaderboards page
+#   - Scorecards page
+#---------------------------------
 
 import os
 import streamlit as st
@@ -15,6 +13,9 @@ from backend.goam_rounds import GOAMRounds
 from backend.goam_calculator import GOAMCalculator
 
 
+# ---------------------------------------------------------
+# INTERNAL STATE
+# ---------------------------------------------------------
 def _get_rounds_state():
     if "goam_rounds" not in st.session_state:
         st.session_state.goam_rounds = GOAMRounds()
@@ -22,13 +23,6 @@ def _get_rounds_state():
 
 
 def _format_pos_change(delta):
-    """
-    Convert numeric position change into arrow string:
-    - delta > 0  → moved up (better position)  → ⬆️ delta
-    - delta < 0  → moved down (worse position) → ⬇️ abs(delta)
-    - delta == 0 → no change                   → ➡️
-    - delta is None / no history               → –
-    """
     if delta is None:
         return "–"
     try:
@@ -43,41 +37,43 @@ def _format_pos_change(delta):
     return "➡️"
 
 
-def run_scores_app():
-    st.header("📘 GOAM Scores & Rounds")
-
+# ---------------------------------------------------------
+# LOAD + PREPARE DATA (shared by both pages)
+# ---------------------------------------------------------
+def _load_scores():
     rounds = _get_rounds_state()
 
-    # -----------------------------
-    # 1. Load GOAM scores from JSON
-    # -----------------------------
     try:
         goam_scores = GOAMLoader.load_json_scores("data/goam_scores.json")
         season_rounds = GOAMCalculator.build_from_json(goam_scores)
 
         if not season_rounds.empty:
             rounds.rounds = [season_rounds]
-            st.success("GOAM scores loaded from JSON.")
         else:
-            st.info("No GOAM scores found. Load data via Data Manager.")
-            return
+            return None, None, "No GOAM scores found. Load data via Data Manager."
 
     except Exception as e:
-        st.error(f"Error loading GOAM scores: {e}")
-        return
+        return None, None, f"Error loading GOAM scores: {e}"
 
-    # -----------------------------
-    # 2. Build combined rounds table
-    # -----------------------------
     all_rounds_df = rounds.get_all_rounds()
-
     if all_rounds_df.empty:
-        st.info("No rounds available.")
+        return None, None, "No rounds available."
+
+    return rounds, all_rounds_df, None
+
+
+# ---------------------------------------------------------
+# PAGE 1 — LEADERBOARDS
+# ---------------------------------------------------------
+def show_leaderboards():
+    st.header("📘 GOAM Scores & Rounds — Leaderboards")
+
+    rounds, all_rounds_df, error = _load_scores()
+    if error:
+        st.error(error)
         return
 
-    # -----------------------------
-    # 3. Course selection
-    # -----------------------------
+    # Course selection
     st.subheader("🎯 Select courses to include in leaderboards")
 
     all_courses = GOAMCalculator.list_courses(all_rounds_df)
@@ -91,22 +87,17 @@ def run_scores_app():
 
     filtered_df = all_rounds_df[all_rounds_df["Course"].isin(selected_courses)]
 
-    # -----------------------------
-    # 4. Leaderboard calculations
-    # -----------------------------
+    # Leaderboard calculations
     ips_table = GOAMCalculator.build_ips_leaderboard(filtered_df)
     strokes_table = GOAMCalculator.build_strokes_leaderboard(filtered_df)
     liv_table = GOAMCalculator.build_liv_leaderboard(filtered_df)
-    course_sheets = GOAMCalculator.split_by_course(filtered_df)
 
     if ips_table.empty:
         st.info("No IPS data available for selected courses.")
         return
 
-    # Normalize column names just in case
     ips_table.rename(columns={c: c.strip() for c in ips_table.columns}, inplace=True)
 
-    # Ensure Position exists (defensive)
     if "Position" not in ips_table.columns:
         if "IPS" in ips_table.columns:
             ips_table["Position"] = (
@@ -118,10 +109,7 @@ def run_scores_app():
             st.error("IPS column missing from IPS leaderboard.")
             return
 
-    # -----------------------------
-    # 5. Update position history & Pos Change arrows
-    # -----------------------------
-    # GOAMRounds is assumed to track numeric positions internally.
+    # Update position history
     rounds.update_position_history(ips_table)
 
     ips_table = ips_table.copy()
@@ -132,9 +120,7 @@ def run_scores_app():
     else:
         ips_table.insert(2, "Pos Change", "–")
 
-    # -----------------------------
-    # 6. Leaderboard Selector
-    # -----------------------------
+    # Leaderboard selector
     st.subheader("🏆 Leaderboards")
 
     leaderboard_choice = st.selectbox(
@@ -143,9 +129,7 @@ def run_scores_app():
         index=0
     )
 
-    # -----------------------------
-    # 7. Display selected leaderboard
-    # -----------------------------
+    # Display leaderboard
     if leaderboard_choice == "IPS":
         st.subheader("🏆 IPS Leaderboard (Best 6 + Course Breakdown)")
         st.dataframe(ips_table, width="stretch")
@@ -158,10 +142,22 @@ def run_scores_app():
         st.subheader("🏁 LIV Team Leaderboard (Top 3 IPS per Course)")
         st.dataframe(liv_table, width="stretch")
 
-    # -----------------------------
-    # 8. View Score Cards
-    # -----------------------------
-    st.subheader("📂 View Score Cards")
+
+# ---------------------------------------------------------
+# PAGE 2 — SCORECARDS
+# ---------------------------------------------------------
+def show_scorecards():
+    st.header("📂 GOAM Scorecards")
+
+    rounds, all_rounds_df, error = _load_scores()
+    if error:
+        st.error(error)
+        return
+
+    # Build course sheets
+    course_sheets = GOAMCalculator.split_by_course(all_rounds_df)
+
+    st.subheader("📄 View Score Cards")
 
     options = ["None"] + list(course_sheets.keys())
     choice = st.selectbox("Select Course", options)
@@ -169,10 +165,12 @@ def run_scores_app():
     if choice in course_sheets:
         st.dataframe(course_sheets[choice], width="stretch")
 
-    # -----------------------------
-    # 9. Export updated workbook
-    # -----------------------------
+    # Export workbook
     st.subheader("💾 Export updated GOAM workbook")
+
+    ips_table = GOAMCalculator.build_ips_leaderboard(all_rounds_df)
+    strokes_table = GOAMCalculator.build_strokes_leaderboard(all_rounds_df)
+    liv_table = GOAMCalculator.build_liv_leaderboard(all_rounds_df)
 
     output_file = GOAMCalculator.generate_output_filename()
     os.makedirs("data", exist_ok=True)
@@ -189,7 +187,21 @@ def run_scores_app():
     with open(output_path, "rb") as f:
         st.download_button(
             label=f"Download {output_file}",
-            data=f,
+            data=f.read(),
             file_name=output_file,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+
+# ---------------------------------------------------------
+# MAIN ENTRY POINT
+# ---------------------------------------------------------
+def run_scores_app(mode="leaderboards"):
+    if mode == "leaderboards":
+        show_leaderboards()
+
+    elif mode == "scorecards":
+        show_scorecards()
+
+    else:
+        st.error("Invalid mode for run_scores_app()")

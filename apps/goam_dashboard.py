@@ -114,4 +114,6 @@ def run():
 
     month = st.selectbox("Select month", sorted(scores.keys()))
 
-    st.write(scores[month])
+    month_data = scores[month]
+    players_df = pd.DataFrame(month_data["players"])
+    st.dataframe(players_df)

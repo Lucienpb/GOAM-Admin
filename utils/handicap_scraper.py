@@ -1,113 +1,114 @@
 """
-Handicap Scraper Module - Handles Handicaps.co.za scraping via Playwright
+Handicap Scraper Module - Clean version (NO caching, NO Streamlit dependencies)
 """
 import logging
-import streamlit as st
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 logger = logging.getLogger(__name__)
 
-# ================================================================================
-# CACHE HELPERS
-# ================================================================================
-def get_cached_result(member_no):
-    """Get cached scrape result"""
-    return st.session_state.scrape_cache.get(member_no)
+HANDICAPS_URL = "https://www.handicaps.co.za/login"
+HEADLESS = True  # Streamlit cannot show visible browsers
 
-def save_cached_result(member_no, result):
-    """Save scrape result to cache"""
-    st.session_state.scrape_cache[member_no] = result
 
 # ================================================================================
-# PLAYWRIGHT LOGIN
+# INTERNAL: LOGIN
 # ================================================================================
-def _login_and_wait_dashboard(page, username, password):
-    """Login to Handicaps.co.za and wait for dashboard"""
-    page.goto("https://www.handicaps.co.za/login", timeout=60000)
-    page.wait_for_selector("#MemNo", timeout=15000)
+def _login_and_get_page(p, username, password):
+    """Login and return (browser, page)."""
 
+    browser = p.chromium.launch(headless=HEADLESS)
+    page = browser.new_page()
+
+    logger.info("Navigating to login page...")
+    page.goto(HANDICAPS_URL, timeout=60000)
+
+    # Login fields
     page.fill("#MemNo", username)
     page.fill("#Password", password)
     page.click("button.dg-login-signup__btn")
 
-    page.wait_for_selector(
-        "div.form-group.form-group-member.col-md-9",
-        state="attached",
-        timeout=60000,
+    # Wait for dashboard search box
+    try:
+        page.get_by_role("textbox", name="Search by name or Mem No.").wait_for(timeout=30000)
+    except PlaywrightTimeoutError:
+        page.wait_for_selector("input[placeholder*='Search']", timeout=30000)
+
+    logger.info("Login successful.")
+    return browser, page
+
+
+# ================================================================================
+# INTERNAL: SEARCH BOX
+# ================================================================================
+def _fill_search_box(page, membership_number):
+    """Fill the search box using the correct selector."""
+    try:
+        box = page.get_by_role("textbox", name="Search by name or Mem No.")
+        box.fill(membership_number)
+    except Exception:
+        page.fill("input[placeholder*='Search']", membership_number)
+
+    page.wait_for_timeout(1200)  # allow Vue to fetch + render
+
+
+# ================================================================================
+# INTERNAL: EXTRACT NAME + INDEX
+# ================================================================================
+def _extract_name_and_index(page, fallback_name=None):
+    """Extract name + handicap index from Vue-rendered DOM."""
+
+    try:
+        page.wait_for_selector("a[data-bind*='Name']", timeout=20000)
+        page.wait_for_selector("span[data-bind*='HandicapIndexText']", timeout=20000)
+    except PlaywrightTimeoutError:
+        logger.warning("Vue did not render any results.")
+        return fallback_name, None
+
+    # --- Name ---
+    raw_name = (
+        page.locator("a[data-bind*='Name']")
+        .first.inner_text()
+        .strip()
     )
 
-    page.wait_for_selector("#searchMemberName", state="attached", timeout=60000)
-    page.wait_for_timeout(300)
+    if "," in raw_name:
+        last, first = raw_name.split(",", 1)
+        name = f"{first.strip()} {last.strip()}"
+    else:
+        name = raw_name
 
-def test_login(username, password):
-    """Test login credentials"""
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            _login_and_wait_dashboard(page, username, password)
-            browser.close()
-        return True
-    except Exception as e:
-        logger.error(f"Login failed: {e}")
-        return False
+    # --- Handicap Index ---
+    index_text = (
+        page.locator("span[data-bind*='HandicapIndexText']")
+        .first.inner_text()
+        .strip()
+    )
+
+    handicap_index = None if index_text.lower() == "pending" else index_text
+
+    return name, handicap_index
+
 
 # ================================================================================
-# SCRAPE HANDICAP
+# PUBLIC: SCRAPE HANDICAP
 # ================================================================================
 def scrape_handicap_pw(username, password, membership_number, fallback_name=None):
-    """Scrape handicap for a member"""
-    cached = get_cached_result(membership_number)
-    if cached:
-        cached = cached.copy()
-        cached["status"] = "cached"
-        return cached
+    """
+    Scrape a single member's name + handicap index.
+    Returns (name, index) or (fallback_name, None) on failure.
+    """
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            browser, page = _login_and_get_page(p, username, password)
 
-            _login_and_wait_dashboard(page, username, password)
+            _fill_search_box(page, membership_number)
 
-            page.fill("#searchMemberName", membership_number)
-            page.wait_for_timeout(500)
-
-            page.wait_for_selector("a[href*='golf-profile']", timeout=20000)
-            page.wait_for_selector("span[data-bind*='HandicapIndexText']", timeout=20000)
-
-            name = page.locator("a[href*='golf-profile']").first.inner_text().strip()
-
-            if "," in name:
-                parts = name.split(",")
-                if len(parts) == 2:
-                    name = parts[1].strip() + " " + parts[0].strip()
-
-            index = page.locator(
-                "span[data-bind*='HandicapIndexText']"
-            ).first.inner_text().strip()
+            name, index = _extract_name_and_index(page, fallback_name=fallback_name)
 
             browser.close()
-
-            result = {
-                "membership": membership_number,
-                "name": name,
-                "handicap_index": index,
-                "cap": None,
-                "status": "ok",
-            }
-            save_cached_result(membership_number, result)
-            return result
+            return name, index
 
     except Exception as e:
         logger.error(f"Scrape error for {membership_number}: {e}")
-        result = {
-            "membership": membership_number,
-            "name": fallback_name,
-            "handicap_index": None,
-            "cap": None,
-            "status": "error",
-            "error": str(e),
-        }
-        save_cached_result(membership_number, result)
-        return result
+        return fallback_name, None

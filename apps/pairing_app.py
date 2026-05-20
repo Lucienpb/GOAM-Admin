@@ -1,6 +1,10 @@
-"""
-Pairing Matrix & Fourball App (JSON Version) — TABBED VERSION
-"""
+#-------------------------------------------------
+#"""
+#Pairing Matrix & Fourball App (JSON Version) — SPLIT MODE (NO TABS)
+#   - Pairing Matrix page
+#   - Fourball Generator page   
+# -------------------------------------------------"""
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -93,10 +97,224 @@ def format_player(p, display_map, teams, player_modes):
 
 
 # ---------------------------------------------------------
-# MAIN APP (TABS)
+# MATRIX PAGE
 # ---------------------------------------------------------
-def run():
-    st.header("⛳ Pairing Matrix & Fourball Generator (JSON Mode)")
+def show_matrix_page(players_df, pairings_json, alias_map, display_map):
+    st.header("📊 Pairing Matrix")
+
+    matrix = build_pairing_matrix(pairings_json, players_df, alias_map)
+
+    # Mark unofficial players
+    official_set = set(players_df["name"].apply(lambda x: normalize_name(x, alias_map)))
+    for p in matrix.index:
+        if p not in official_set:
+            display_map[p] = f"{p}*"
+        else:
+            if p not in display_map:
+                display_map[p] = p
+
+    matrix_display = matrix.copy().astype(object)
+    for p in matrix_display.index:
+        matrix_display.loc[p, p] = "-"
+
+    matrix_display.index = [display_map[p] for p in matrix.index]
+    matrix_display.columns = [display_map[p] for p in matrix.columns]
+
+    with st.expander("View Matrix", expanded=False):
+        st.dataframe(matrix_display)
+
+    # Heatmap
+    show_heatmap = st.checkbox("Show pairing heatmap")
+
+    if show_heatmap:
+        st.subheader("🔥 Pairing Heatmap")
+
+        numeric_matrix = matrix.astype(int)
+
+        fig, ax = plt.subplots()
+        im = ax.imshow(numeric_matrix.values, cmap="YlOrRd")
+
+        ax.set_xticks(range(len(matrix.columns)))
+        ax.set_yticks(range(len(matrix.index)))
+        ax.set_xticklabels([display_map[p] for p in matrix.columns], rotation=90)
+        ax.set_yticklabels([display_map[p] for p in matrix.index])
+
+        plt.colorbar(im, ax=ax, label="Times paired")
+        st.pyplot(fig)
+
+    # Lookup
+    st.subheader("🔍 Player Pairing Lookup")
+
+    players_list = [p.strip() for p in matrix.index]
+
+    lookup_player = st.selectbox(
+        "Select a player",
+        players_list,
+        format_func=lambda p: display_map[p.strip()]
+    )
+
+    if lookup_player:
+        lookup_player = lookup_player.strip()
+
+        played_with = []
+        not_played_with = []
+
+        for p in players_list:
+            if p == lookup_player:
+                continue
+
+            val = matrix.loc[lookup_player, p]
+
+            if isinstance(val, int) and val > 0:
+                played_with.append(p)
+            else:
+                not_played_with.append(p)
+
+        st.markdown(f"### ✅ {display_map[lookup_player]} HAS played with")
+        st.table(pd.DataFrame({"Player": [display_map[p] for p in played_with]}))
+
+        st.markdown(f"### ❌ {display_map[lookup_player]} has NOT played with")
+        st.table(pd.DataFrame({"Player": [display_map[p] for p in not_played_with]}))
+
+
+# ---------------------------------------------------------
+# FOURBALL GENERATOR PAGE
+# ---------------------------------------------------------
+def show_generator_page(players_df, pairings_json, alias_map, display_map):
+    st.header("🏌️ 4‑Ball Generator")
+
+    matrix = build_pairing_matrix(pairings_json, players_df, alias_map)
+    all_players = list(matrix.index)
+
+    st.subheader("📝 Select Players Playing This Month")
+    selected_players = st.multiselect(
+        "Choose players for this month",
+        all_players,
+        default=all_players,
+        format_func=lambda p: display_map[p]
+    )
+
+    # TEAM INITIALS
+    teams = dict(
+        zip(
+            players_df["name"].apply(lambda x: normalize_name(x, alias_map)),
+            players_df["team"].apply(lambda t: "".join(word[0] for word in t.split()).upper())
+        )
+    )
+
+    # PLAYER MODES
+    player_modes = {}
+
+    # ADD GUESTS
+    st.subheader("➕ Add Guest Players")
+
+    guest_name = st.text_input("Guest name")
+    guest_cart = st.checkbox("Guest is carting 🛺", value=False)
+
+    if st.button("Add Guest"):
+        name_clean = guest_name.strip()
+
+        if name_clean:
+            guest_id = "guest_" + name_clean.lower().replace(" ", "_")
+
+            if guest_id not in selected_players:
+                selected_players.append(guest_id)
+
+            display_map[guest_id] = name_clean
+            player_modes[guest_id] = "Carting 🛺" if guest_cart else "Walking 🚶‍♂️"
+            teams[guest_id] = ""
+
+            if guest_id not in matrix.index:
+                matrix.loc[guest_id] = 0
+                matrix[guest_id] = 0
+
+            st.success(f"Guest added: {name_clean}")
+
+    # WALKING / CARTING TABLE
+    st.subheader("🚶‍♂️ / 🛺 Walking or Carting")
+
+    header_cols = st.columns([0.25, 1])
+    with header_cols[0]:
+        st.markdown("### Player")
+    with header_cols[1]:
+        st.markdown("### Carting")
+
+    st.markdown("""
+        <style>
+            .big-checkbox .stCheckbox > label > div:first-child {
+                transform: scale(1.5);
+                margin-left: -8px;
+                margin-top: 2px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    for p in selected_players:
+        if p.startswith("guest_"):
+            continue
+
+        c1, c2 = st.columns([0.25, 1])
+
+        with c1:
+            st.markdown(
+                f"<div style='font-size:1.1rem; font-weight:600; margin-top:6px;'>{display_map[p]}</div>",
+                unsafe_allow_html=True
+            )
+
+        with c2:
+            st.markdown("<div class='big-checkbox'>", unsafe_allow_html=True)
+            is_cart = st.checkbox("🛺", key=f"cart_{p}", label_visibility="visible")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        player_modes[p] = "Carting 🛺" if is_cart else "Walking 🚶‍♂️"
+
+    strict_mode = st.checkbox("Strict mode (never allow 1- or 2-balls)", value=True)
+
+    shuffle_seed = st.number_input(
+        "Shuffle seed",
+        min_value=0,
+        value=0,
+        step=1
+    )
+
+    if st.button("Generate Fourballs"):
+        if len(selected_players) < 3:
+            st.error("Need at least 3 players to generate fourballs.")
+            return
+
+        final_groups, penalty = generate_fourballs(
+            selected_players,
+            teams,
+            matrix,
+            strict_mode,
+            shuffle_seed,
+            player_modes
+        )
+
+        st.subheader("🏌️ Fourballs for Next Month")
+
+        rows = []
+        for i, g in enumerate(final_groups, 1):
+            row = {
+                "Fourball": i,
+                "Player 1": format_player(g[0], display_map, teams, player_modes) if len(g) > 0 else "",
+                "Player 2": format_player(g[1], display_map, teams, player_modes) if len(g) > 1 else "",
+                "Player 3": format_player(g[2], display_map, teams, player_modes) if len(g) > 2 else "",
+                "Player 4": format_player(g[3], display_map, teams, player_modes) if len(g) > 3 else "",
+            }
+            rows.append(row)
+
+        st.dataframe(pd.DataFrame(rows))
+
+
+# ---------------------------------------------------------
+# MAIN ENTRY POINT
+# ---------------------------------------------------------
+def run(mode="matrix"):
+    """
+    mode = "matrix"     → Show pairing matrix page
+    mode = "generator"  → Show 4‑ball generator page
+    """
 
     players = load_json("data/players.json")
     raw_pairings = load_json("data/pairings.json")
@@ -121,215 +339,11 @@ def run():
             for w in warnings:
                 st.write(w)
 
-    tab_matrix, tab_fourball = st.tabs(["📊 Matrix", "🏌️ Gen. 4 Ball"])
+    if mode == "matrix":
+        show_matrix_page(players_df, pairings_json, alias_map, display_map)
 
-    # ---------------------------------------------------------
-    # TAB 1 — PAIRING MATRIX
-    # ---------------------------------------------------------
-    with tab_matrix:
-        st.subheader("📊 Pairing Matrix (from JSON history)")
+    elif mode == "generator":
+        show_generator_page(players_df, pairings_json, alias_map, display_map)
 
-        matrix = build_pairing_matrix(pairings_json, players_df, alias_map)
-
-        official_set = set(players_df["name"].apply(lambda x: normalize_name(x, alias_map)))
-        for p in matrix.index:
-            if p not in official_set:
-                display_map[p] = f"{p}*"
-            else:
-                if p not in display_map:
-                    display_map[p] = p
-
-        matrix_display = matrix.copy().astype(object)
-        for p in matrix_display.index:
-            matrix_display.loc[p, p] = "-"
-
-        matrix_display.index = [display_map[p] for p in matrix.index]
-        matrix_display.columns = [display_map[p] for p in matrix.columns]
-
-        with st.expander("View Matrix", expanded=False):
-            st.dataframe(matrix_display)
-
-        show_heatmap = st.checkbox("Show pairing heatmap")
-
-        if show_heatmap:
-            st.subheader("🔥 Pairing Heatmap")
-
-            numeric_matrix = matrix.astype(int)
-
-            fig, ax = plt.subplots()
-            im = ax.imshow(numeric_matrix.values, cmap="YlOrRd")
-
-            ax.set_xticks(range(len(matrix.columns)))
-            ax.set_yticks(range(len(matrix.index)))
-            ax.set_xticklabels([display_map[p] for p in matrix.columns], rotation=90)
-            ax.set_yticklabels([display_map[p] for p in matrix.index])
-
-            plt.colorbar(im, ax=ax, label="Times paired")
-            st.pyplot(fig)
-
-        st.subheader("🔍 Player Pairing Lookup")
-
-        players_list = [p.strip() for p in matrix.index]
-
-        lookup_player = st.selectbox(
-            "Select a player",
-            players_list,
-            format_func=lambda p: display_map[p.strip()]
-        )
-
-        if lookup_player:
-            lookup_player = lookup_player.strip()
-
-            played_with = []
-            not_played_with = []
-
-            for p in players_list:
-                if p == lookup_player:
-                    continue
-
-                val = matrix.loc[lookup_player, p]
-
-                if isinstance(val, int) and val > 0:
-                    played_with.append(p)
-                else:
-                    not_played_with.append(p)
-
-            st.markdown(f"### ✅ {display_map[lookup_player]} HAS played with")
-            st.table(pd.DataFrame({"Player": [display_map[p] for p in played_with]}))
-
-            st.markdown(f"### ❌ {display_map[lookup_player]} has NOT played with")
-            st.table(pd.DataFrame({"Player": [display_map[p] for p in not_played_with]}))
-
-    # ---------------------------------------------------------
-    # TAB 2 — FOURBALL GENERATOR
-    # ---------------------------------------------------------
-    with tab_fourball:
-        st.subheader("3️⃣ Fourball Generator")
-
-        matrix = build_pairing_matrix(pairings_json, players_df, alias_map)
-        all_players = list(matrix.index)
-
-        st.subheader("📝 Select Players Playing This Month")
-        selected_players = st.multiselect(
-            "Choose players for this month",
-            all_players,
-            default=all_players,
-            format_func=lambda p: display_map[p]
-        )
-
-        st.subheader("➕ Add Guest Players")
-        guest_name = st.text_input("Guest name")
-        guest_cart = st.checkbox("Guest is carting 🛺", value=False)
-
-        if st.button("Add Guest"):
-            if guest_name.strip():
-                np = normalize_name(guest_name.strip(), alias_map)
-                if np not in selected_players:
-                    selected_players.append(np)
-                display_map[np] = guest_name.strip()
-                st.success(f"Guest added: {guest_name}")
-
-        # ---------------------------------------------------------
-        # WALKING / CARTING TABLE LAYOUT (NAME LEFT, ONE BIG CHECKBOX RIGHT)
-        # ---------------------------------------------------------
-        st.subheader("🚶‍♂️ / 🛺 Walking or Carting")
-
-        header_cols = st.columns([2.5, 1])
-        with header_cols[0]:
-            st.markdown("### Player")
-        with header_cols[1]:
-            st.markdown("### Carting")
-
-        # Make Streamlit checkboxes bigger using CSS
-        st.markdown("""
-            <style>
-                .big-checkbox .stCheckbox > label > div:first-child {
-                    transform: scale(1.5);
-                    margin-left: -8px;
-                    margin-top: 2px;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-
-        player_modes = {}
-
-        for p in selected_players:
-            c1, c2 = st.columns([2.5, 1])
-
-            with c1:
-                st.markdown(
-                    f"<div style='font-size:1.1rem; font-weight:600; margin-top:6px;'>{display_map[p]}</div>",
-                    unsafe_allow_html=True
-                )
-
-            with c2:
-                st.markdown("<div class='big-checkbox'>", unsafe_allow_html=True)
-                is_cart = st.checkbox("", key=f"cart_{p}", label_visibility="collapsed")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            player_modes[p] = "Carting 🛺" if is_cart else "Walking 🚶‍♂️"
-
-        strict_mode = st.checkbox("Strict mode (never allow 1- or 2-balls)", value=True)
-
-        shuffle_seed = st.number_input(
-            "Shuffle seed",
-            min_value=0,
-            value=0,
-            step=1
-        )
-
-        if st.button("Generate Fourballs"):
-            if len(selected_players) < 3:
-                st.error("Need at least 3 players to generate fourballs.")
-                return
-
-            teams = dict(
-                zip(
-                    players_df["name"].apply(lambda x: normalize_name(x, alias_map)),
-                    players_df["team"]
-                )
-            )
-
-            final_groups, penalty = generate_fourballs(
-                selected_players,
-                teams,
-                matrix,
-                strict_mode,
-                shuffle_seed,
-                player_modes
-            )
-
-            st.subheader("🏌️ Fourballs for Next Month")
-
-            rows = []
-            for i, g in enumerate(final_groups, 1):
-                row = {
-                    "Fourball": i,
-                    "Player 1": format_player(g[0], display_map, teams, player_modes) if len(g) > 0 else "",
-                    "Player 2": format_player(g[1], display_map, teams, player_modes) if len(g) > 1 else "",
-                    "Player 3": format_player(g[2], display_map, teams, player_modes) if len(g) > 2 else "",
-                    "Player 4": format_player(g[3], display_map, teams, player_modes) if len(g) > 3 else "",
-                }
-                rows.append(row)
-
-            df = pd.DataFrame(rows)
-
-            def color_mode(val):
-                if isinstance(val, str) and "🛺" in val:
-                    return "color: #0b3d91; font-weight: 600;"
-                if isinstance(val, str) and "🚶‍♂️" in val:
-                    return "color: #1b7f3b; font-weight: 600;"
-                return ""
-
-            styled = df.style.applymap(color_mode, subset=["Player 1", "Player 2", "Player 3", "Player 4"])
-            st.dataframe(styled, use_container_width=True)
-
-            whatsapp_lines = []
-            for i, g in enumerate(final_groups, 1):
-                line = f"Fourball {i}: " + ", ".join(
-                    format_player(p, display_map, teams, player_modes) for p in g
-                )
-                whatsapp_lines.append(line)
-
-            st.subheader("📲 WhatsApp Text")
-            st.text_area("Copy & paste to WhatsApp:", "\n".join(whatsapp_lines), height=150)
+    else:
+        st.error("Invalid mode for pairing_app.run()")

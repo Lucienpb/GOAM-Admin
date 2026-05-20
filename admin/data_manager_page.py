@@ -6,11 +6,13 @@
 # - Player information (players.json)
 # - Pairings information (pairings.json)
 # - GOAM Scores (goam_scores.json) with derived fields
-#--------------
+# Also allows downloading all JSON data files
+#######################################
+
 import streamlit as st
 import pandas as pd
+import os
 from utils.json_utils import load_json, save_json
-
 
 # -------------------------------------------------------------------
 # SAFE HELPERS
@@ -63,7 +65,6 @@ def convert_course_excel_to_json(df: pd.DataFrame):
         tee = safe_str(row.get("Tee Name"))
 
         if not course or not tee:
-            # Skip incomplete rows
             continue
 
         slope = safe_float(row.get("Slope Rating"))
@@ -102,7 +103,7 @@ def delta_load_course_data(df: pd.DataFrame):
 
 
 # -------------------------------------------------------------------
-# PLAYERS SECTION (with Nick1–Nick4 support)
+# PLAYERS SECTION
 # -------------------------------------------------------------------
 def convert_players_excel_to_json(df):
     required_cols = ["Name", "membership_number", "Handicap Index Cap"]
@@ -110,11 +111,10 @@ def convert_players_excel_to_json(df):
     if missing:
         raise ValueError(f"Missing required columns in Players.xlsx: {missing}")
 
-    # Optional nickname columns
     nickname_cols = ["Nick1", "Nick2", "Nick3", "Nick4"]
     for col in nickname_cols:
         if col not in df.columns:
-            df[col] = None  # ensure column exists
+            df[col] = None
 
     players = []
 
@@ -150,7 +150,6 @@ def delta_load_players(df: pd.DataFrame):
     existing = load_json("data/players.json") or []
     incoming = convert_players_excel_to_json(df)
 
-    # Merge by membership number
     existing_map = {p["membership"]: p for p in existing}
 
     for p in incoming:
@@ -159,16 +158,12 @@ def delta_load_players(df: pd.DataFrame):
     merged = list(existing_map.values())
     save_json("data/players.json", merged)
 
+
 # -------------------------------------------------------------------
-# PAIRINGS SECTION (GOAM 4-Ball Format with Month + Course)
+# PAIRINGS SECTION
 # -------------------------------------------------------------------
 def extract_month_and_course(df: pd.DataFrame):
-    """
-    Reads the first cell of the sheet to extract:
-    - Month key (e.g., "Feb'26")
-    - Course name (e.g., "Akasia GC")
-    """
-    header_text = str(df.columns[0])
+    header_text = safe_str(df.iloc[0, 0])
 
     if ":" in header_text:
         month_part, _ = header_text.split(":", 1)
@@ -187,7 +182,6 @@ def extract_month_and_course(df: pd.DataFrame):
 def convert_pairings_excel_to_json(df: pd.DataFrame):
     month_key, course = extract_month_and_course(df)
 
-    # Assume first row is header row with fourball + players
     df = df.copy()
     df.columns = ["Fourball", "Player 1", "Player 2", "Player 3", "Player 4"]
 
@@ -233,7 +227,7 @@ def delta_load_pairings(df: pd.DataFrame):
 
 
 # -------------------------------------------------------------------
-# GOAM SCORES SECTION (with derived fields)
+# GOAM SCORES SECTION
 # -------------------------------------------------------------------
 SHEET_MONTH_MAP = {
     "Akasia": "Feb'26",
@@ -249,7 +243,6 @@ SHEET_MONTH_MAP = {
 
 
 def compute_derived_fields(players):
-    """Compute Best Gross, Best Nett, OX Nau, Placements, LIV totals, Pool, Fines."""
     if not players:
         return {
             "best_gross": None,
@@ -261,11 +254,9 @@ def compute_derived_fields(players):
             "fines_total": 0,
         }
 
-    # Best Gross
     best_gross_player = min(players, key=lambda p: p.get("strokes", 9999))
     best_gross = best_gross_player.get("name")
 
-    # Best Nett
     for p in players:
         hcp = p.get("handicap")
         strokes = p.get("strokes")
@@ -280,18 +271,15 @@ def compute_derived_fields(players):
     nett_players = [p for p in players if p.get("nett") is not None]
     best_nett = min(nett_players, key=lambda p: p["nett"])["name"] if nett_players else None
 
-    # OX Nau = lowest IPS
     ox_nau_player = min(players, key=lambda p: p.get("ips", 9999))
     ox_nau = ox_nau_player.get("name")
 
-    # Placements (sorted by IPS desc)
     placements_sorted = sorted(players, key=lambda p: p.get("ips", 0), reverse=True)
     placements = [
         {"position": i + 1, "name": p.get("name"), "ips": p.get("ips")}
         for i, p in enumerate(placements_sorted)
     ]
 
-    # LIV totals = top 3 IPS per team
     team_map = {}
     for p in players:
         team = p.get("team", "")
@@ -304,11 +292,9 @@ def compute_derived_fields(players):
         if team
     }
 
-    # Pool winner
     pool_players = [p for p in players if p.get("pool_payouts")]
     pool_winner = max(pool_players, key=lambda p: p.get("pool_payouts", 0)).get("name") if pool_players else None
 
-    # Fines total
     fines_total = sum([p.get("fines", 0) or 0 for p in players])
 
     return {
@@ -352,12 +338,11 @@ def convert_goam_scores_workbook_to_json(xls: dict):
                 "team": team,
             }
 
-            # Optional extended fields
             for col in ["Handicap", "NP1", "NP2", "LD1", "LD2", "BG", "BN",
                         "Pool Bet", "Pool Payouts", "Fines"]:
                 if col in df.columns:
                     key = col.lower().replace(" ", "_")
-                    player[key] = row.get(col)
+                    player[key] = safe_int(row.get(col))
 
             players.append(player)
 
@@ -482,3 +467,28 @@ def show_data_manager_page():
                     st.success("GOAM scores merged (delta load).")
             except Exception as e:
                 st.error(f"Error processing GOAM scores: {e}")
+
+    st.markdown("---")
+
+    # ---------------- DOWNLOAD SECTION ----------------
+    st.subheader("⬇️ Download Data Files")
+
+    data_files = {
+        "Course Data": "data/course_data.json",
+        "Players": "data/players.json",
+        "Pairings": "data/pairings.json",
+        "GOAM Scores": "data/goam_scores.json",
+    }
+
+    for label, path in data_files.items():
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                st.download_button(
+                    label=f"Download {label}",
+                    data=f.read(),
+                    file_name=os.path.basename(path),
+                    mime="application/json",
+                    use_container_width=True
+                )
+        else:
+            st.warning(f"{label} file not found: {path}")
