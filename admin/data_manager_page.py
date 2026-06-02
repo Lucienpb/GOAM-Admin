@@ -106,7 +106,7 @@ def delta_load_course_data(df: pd.DataFrame):
 # PLAYERS SECTION
 # -------------------------------------------------------------------
 def convert_players_excel_to_json(df):
-    required_cols = ["Name", "membership_number", "Handicap Index Cap"]
+    required_cols = ["Name", "membership_number", "Handicap Index Cap", "Email"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns in Players.xlsx: {missing}")
@@ -132,11 +132,13 @@ def convert_players_excel_to_json(df):
             "membership": membership,
             "handicap_index": handicap_index,
             "team": team,
+            "email": safe_str(row.get("Email")),
             "Nick1": safe_str(row.get("Nick1")),
             "Nick2": safe_str(row.get("Nick2")),
             "Nick3": safe_str(row.get("Nick3")),
             "Nick4": safe_str(row.get("Nick4")),
         })
+    
 
     return players
 
@@ -471,7 +473,7 @@ def show_data_manager_page():
     st.markdown("---")
 
     # ---------------- DOWNLOAD SECTION ----------------
-    st.subheader("⬇️ Download Data Files")
+    st.subheader("⬇️ Download Data Files (CSV Format)")
 
     data_files = {
         "Course Data": "data/course_data.json",
@@ -482,13 +484,34 @@ def show_data_manager_page():
 
     for label, path in data_files.items():
         if os.path.exists(path):
-            with open(path, "rb") as f:
+            try:
+                # Load JSON
+                data = load_json(path)
+
+                # Convert to DataFrame depending on structure
+                if isinstance(data, dict):
+                    # Pairings, Courses, GOAM Scores
+                    df = pd.json_normalize(data, sep="_")
+                elif isinstance(data, list):
+                    # Players
+                    df = pd.DataFrame(data)
+                else:
+                    st.warning(f"Unsupported format in {label}")
+                    continue
+
+                # Convert to CSV bytes
+                csv_bytes = df.to_csv(index=False).encode("utf-8")
+
                 st.download_button(
-                    label=f"Download {label}",
-                    data=f.read(),
-                    file_name=os.path.basename(path),
-                    mime="application/json",
+                    label=f"Download {label} (CSV)",
+                    data=csv_bytes,
+                    file_name=f"{label.replace(' ', '_').lower()}.csv",
+                    mime="text/csv",
                     use_container_width=True
                 )
+
+            except Exception as e:
+                st.error(f"Error converting {label} to CSV: {e}")
+
         else:
             st.warning(f"{label} file not found: {path}")

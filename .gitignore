@@ -45,3 +45,7 @@ Thumbs.db
 *.lnk
 desktop.ini
 ntuser.ini
+
+# Hugging Face directories
+goam-admin-hf-v3/
+
